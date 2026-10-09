@@ -1,0 +1,197 @@
+import re
+from typing import List, Dict, Any, Optional, Tuple
+
+GROUP_CATEGORIES_PROMPT = (
+    "Please reorganize the shopping list in shopping/list.md by supermarket categories "
+    "(such as Produce, Bakery, Dairy & Eggs, Meat & Seafood, Pantry, Frozen, Household) "
+    "so that items usually close to each other in the supermarket are grouped together under "
+    "markdown ## Category headings. Keep all items, preserve checkbox statuses, "
+    "and ensure all completed items (- [x]) are placed at the very bottom under a '## Completed' section."
+)
+
+MERGE_DUPLICATES_PROMPT = (
+    "Please merge any duplicate or overlapping items in the shopping list in shopping/list.md. "
+    "Combine quantities (e.g. '2 apples' + '3 apples' -> '5 apples' or 'Milk' + 'Milk' -> '2x Milk'). "
+    "Keep all unique items, preserve existing categories, and keep all completed items (- [x]) "
+    "at the very bottom under a '## Completed' section."
+)
+
+CHECKBOX_PATTERN = re.compile(r"^(\s*)[-*+]\s+\[([ xX])\]\s*(.*)$")
+PLAIN_BULLET_PATTERN = re.compile(r"^(\s*)[-*+]\s+(.*)$")
+HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
+
+def parse_shopping_list(content: str) -> Dict[str, Any]:
+    """
+    Parses shopping/list.md content into categories and items.
+    Returns:
+    {
+        "title": "...",
+        "items": [
+            {"id": "...", "text": "...", "done": bool, "category": "...", "raw": "..."}
+        ],
+        "categories": ["Produce", "Dairy", ...]
+    }
+    """
+    lines = content.splitlines()
+    title = "Shopping List"
+    current_category = "General"
+    items = []
+    categories = []
+    item_counter = 0
+
+    for idx, line in enumerate(lines):
+        heading_match = HEADING_PATTERN.match(line.strip())
+        if heading_match:
+            level = len(heading_match.group(1))
+            name = heading_match.group(2).strip()
+            if level == 1:
+                title = name
+            else:
+                current_category = name
+                if current_category not in categories and current_category.lower() not in ("completed", "done"):
+                    categories.append(current_category)
+            continue
+
+        chk_match = CHECKBOX_PATTERN.match(line)
+        if chk_match:
+            item_counter += 1
+            is_done = chk_match.group(2).lower() == 'x'
+            item_text = chk_match.group(3).strip()
+            
+            # Clean strike-through if present in markdown text
+            display_text = item_text
+            if display_text.startswith("~~") and display_text.endswith("~~") and len(display_text) > 4:
+                display_text = display_text[2:-2].strip()
+
+            cat = "Completed" if (is_done or current_category.lower() in ("completed", "done")) else current_category
+            items.append({
+                "id": f"item_{item_counter}",
+                "text": display_text,
+                "done": is_done,
+                "category": cat,
+                "raw_line": line,
+                "line_index": idx
+            })
+            continue
+
+        bullet_match = PLAIN_BULLET_PATTERN.match(line)
+        if bullet_match and not line.strip().startswith("- ["):
+            item_counter += 1
+            item_text = bullet_match.group(2).strip()
+            is_done = current_category.lower() in ("completed", "done")
+            display_text = item_text
+            if display_text.startswith("~~") and display_text.endswith("~~") and len(display_text) > 4:
+                display_text = display_text[2:-2].strip()
+                is_done = True
+            cat = "Completed" if is_done else current_category
+            items.append({
+                "id": f"item_{item_counter}",
+                "text": display_text,
+                "done": is_done,
+                "category": cat,
+                "raw_line": line,
+                "line_index": idx
+            })
+
+    # Sort so done items are rendered at the bottom
+    active_items = [i for i in items if not i["done"]]
+    done_items = [i for i in items if i["done"]]
+
+    return {
+        "title": title,
+        "items": active_items + done_items,
+        "active_count": len(active_items),
+        "done_count": len(done_items),
+        "categories": categories
+    }
+
+def format_shopping_list(parsed: Dict[str, Any]) -> str:
+    """
+    Serializes items back to clean markdown with done items at the bottom.
+    """
+    lines = [f"# {parsed.get('title', 'Shopping List')}", ""]
+    
+    items = parsed.get("items", [])
+    active_items = [i for i in items if not i.get("done")]
+    done_items = [i for i in items if i.get("done")]
+
+    # Group active items by category
+    category_order = []
+    by_category: Dict[str, List[Dict[str, Any]]] = {}
+    for item in active_items:
+        cat = item.get("category", "General")
+        if cat.lower() in ("completed", "done"):
+            cat = "General"
+        if cat not in by_category:
+            by_category[cat] = []
+            category_order.append(cat)
+        by_category[cat].append(item)
+
+    if len(category_order) == 1 and category_order[0] in ("General", ""):
+        # Flat list
+        for item in active_items:
+            lines.append(f"- [ ] {item['text']}")
+        lines.append("")
+    else:
+        for cat in category_order:
+            lines.append(f"## {cat}")
+            for item in by_category[cat]:
+                lines.append(f"- [ ] {item['text']}")
+            lines.append("")
+
+    # Render done items at the bottom under Completed
+    if done_items:
+        lines.append("## Completed")
+        for item in done_items:
+            # Marked as cross through at the bottom
+            lines.append(f"- [x] ~~{item['text']}~~")
+        lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
+
+def toggle_shopping_item(content: str, item_id_or_text: str) -> str:
+    """
+    Toggles the done state of an item and pushes done items to the bottom.
+    """
+    parsed = parse_shopping_list(content)
+    target = item_id_or_text.strip().lower()
+
+    for item in parsed["items"]:
+        if item["id"] == item_id_or_text or item["text"].strip().lower() == target:
+            item["done"] = not item["done"]
+            if item["done"]:
+                item["category"] = "Completed"
+            break
+
+    return format_shopping_list(parsed)
+
+def add_shopping_item(content: str, text: str, category: Optional[str] = None) -> str:
+    """
+    Adds a new item to the shopping list.
+    """
+    parsed = parse_shopping_list(content)
+    cat = category.strip() if category and category.strip() else "General"
+    new_item = {
+        "id": f"item_{len(parsed['items']) + 1}",
+        "text": text.strip(),
+        "done": False,
+        "category": cat
+    }
+    # Prepend or append to active items
+    active = [i for i in parsed["items"] if not i["done"]]
+    done = [i for i in parsed["items"] if i["done"]]
+    active.append(new_item)
+    parsed["items"] = active + done
+    return format_shopping_list(parsed)
+
+def remove_shopping_item(content: str, item_id_or_text: str) -> str:
+    """
+    Removes an item from the shopping list.
+    """
+    parsed = parse_shopping_list(content)
+    target = item_id_or_text.strip().lower()
+    parsed["items"] = [
+        i for i in parsed["items"]
+        if i["id"] != item_id_or_text and i["text"].strip().lower() != target
+    ]
+    return format_shopping_list(parsed)

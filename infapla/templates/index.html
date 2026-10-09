@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InFaPla - Intelligent Family Planner</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+</head>
+<body>
+
+  <!-- Top App Navigation -->
+  <header class="app-header">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <button class="mobile-menu-btn" id="mobile-toggle" aria-label="Toggle Navigation">☰</button>
+      <div class="logo-group" onclick="App.showOverview()">
+        <div class="logo-badge">FP</div>
+        <div>
+          <span class="logo-text">InFaPla</span>
+          <span class="logo-sub">Intelligent Family Planner</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="header-nav">
+      <button class="nav-btn active" id="nav-overview" onclick="App.showOverview()">
+        <span>🏠</span><span class="nav-text">Overview</span>
+      </button>
+      <button class="nav-btn" onclick="App.openFile('shopping/list.md')">
+        <span>🛒</span><span class="nav-text">Shopping</span>
+      </button>
+      <button class="nav-btn" onclick="App.openFile('todo/list.md')">
+        <span>✅</span><span class="nav-text">Tasks</span>
+      </button>
+      <button class="nav-btn" onclick="App.openFile('calendar/family.ics')">
+        <span>📅</span><span class="nav-text">Calendar</span>
+      </button>
+    </nav>
+
+    <div class="header-status">
+      <span class="status-badge clean" id="git-status-badge">Git: Synced</span>
+      <button class="nav-btn" onclick="App.manualCommit()" title="Save & commit changes to Git">
+        <span>💾</span><span class="nav-text">Commit</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="app-container">
+    
+    <!-- Sidebar / File Explorer & History -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <div>
+        <div class="sidebar-section-title">
+          <span>Family Workspace</span>
+          <button class="action-pill-btn" onclick="App.promptNewFile()" title="Create new markdown file">+ New</button>
+        </div>
+        <ul class="file-tree-list" id="file-tree-list">
+          <!-- Populated via JavaScript -->
+          <li class="file-tree-item">Loading files...</li>
+        </ul>
+      </div>
+
+      <div style="margin-top: 1rem;">
+        <div class="sidebar-section-title">
+          <span>Git History</span>
+          <button class="action-pill-btn" onclick="App.loadGitHistory()">↻</button>
+        </div>
+        <ul class="file-tree-list" id="git-history-list" style="font-size: 0.8rem;">
+          <!-- Populated via JavaScript -->
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Main Content Viewport -->
+    <main class="app-main">
+
+      <!-- ================= VIEW 1: OVERVIEW DASHBOARD ================= -->
+      <section id="view-overview" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Summary Cards Grid -->
+        <div class="dashboard-grid">
+          
+          <!-- Shopping Card -->
+          <div class="dash-card">
+            <div class="card-header">
+              <span class="card-title"><span>🛒</span> Shopping List</span>
+              <span class="card-count" id="dash-shopping-count">0 items</span>
+            </div>
+            <div class="card-content-preview" id="dash-shopping-preview">
+              Loading shopping list...
+            </div>
+            <div class="card-footer">
+              <button class="primary-btn" onclick="App.openFile('shopping/list.md')">Open List →</button>
+            </div>
+          </div>
+
+          <!-- TODO Card -->
+          <div class="dash-card">
+            <div class="card-header">
+              <span class="card-title"><span>✅</span> Family Tasks</span>
+              <span class="card-count" id="dash-todo-count">0 open</span>
+            </div>
+            <div class="card-content-preview" id="dash-todo-preview">
+              Loading tasks...
+            </div>
+            <div class="card-footer">
+              <button class="primary-btn" onclick="App.openFile('todo/list.md')">Open Tasks →</button>
+            </div>
+          </div>
+
+          <!-- Calendar Card -->
+          <div class="dash-card">
+            <div class="card-header">
+              <span class="card-title"><span>📅</span> Next Events</span>
+              <span class="card-count" id="dash-cal-count">0 events</span>
+            </div>
+            <div class="card-content-preview" id="dash-cal-preview">
+              Loading calendar events...
+            </div>
+            <div class="card-footer">
+              <button class="primary-btn" onclick="App.openCalendarView()">View Schedule →</button>
+            </div>
+          </div>
+
+          <!-- Recipes Card -->
+          <div class="dash-card">
+            <div class="card-header">
+              <span class="card-title"><span>🍲</span> Recipes & Meal Plan</span>
+            </div>
+            <div class="card-content-preview" id="dash-recipe-preview">
+              Loading family favorites...
+            </div>
+            <div class="card-footer">
+              <button class="primary-btn" onclick="App.openFile('shopping/mealplan/2026-10-12.md')">View Meal Plan →</button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- AI Assistant Chatbot in Overview -->
+        <div class="ai-chat-card">
+          <div class="ai-chat-header">
+            <div class="ai-chat-title">
+              <span>🤖</span> InFaPla AI Family Assistant
+            </div>
+            <span class="chat-context-badge">Full Workspace Access (Bubblewrap Sandboxed)</span>
+          </div>
+
+          <div class="ai-messages-list" id="overview-chat-messages">
+            <div class="chat-message assistant">
+              <div class="message-bubble">
+                Hello! I am your family's intelligent planner assistant. I have direct access to your shopping list, meal plans, recipes, tasks, and calendar events. How can I help you today?
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Suggestion Chips -->
+          <div class="ai-actions-row">
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What meals are planned for this week?')">🍲 Weekly meals?</button>
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What items are still pending on the shopping list?')">🛒 What to buy?</button>
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What family tasks are open?')">📋 Open tasks?</button>
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('Suggest a quick 20-minute dinner recipe using our pantry items.')">💡 Quick dinner idea</button>
+          </div>
+
+          <form class="ai-input-form" onsubmit="App.handleOverviewChatSubmit(event)">
+            <input type="text" id="overview-chat-input" class="ai-input-field" placeholder="Ask anything about shopping, recipes, calendar, or tasks..." autocomplete="off">
+            <button type="submit" class="primary-btn" id="overview-chat-send-btn">Send</button>
+          </form>
+        </div>
+
+      </section>
+
+      <!-- ================= VIEW 2: FILE VIEWER / EDITOR ================= -->
+      <section id="view-editor" style="display: none;" class="editor-view-container">
+        
+        <!-- Editor Header & Tabs -->
+        <div class="editor-toolbar">
+          <div class="editor-file-info">
+            <button class="back-to-dash-btn" onclick="App.showOverview()">← Overview</button>
+            <span class="editor-file-path" id="editor-current-path">file.md</span>
+          </div>
+
+          <div class="tab-bar">
+            <!-- Dynamic Primary Special Tab -->
+            <button class="editor-tab primary-special" id="tab-special" onclick="App.switchEditorTab('special')">Interactive View</button>
+            <!-- Default WYSIWYG / Rendered Tab -->
+            <button class="editor-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Preview (WYSIWYG)</button>
+            <!-- RAW Editor Tab -->
+            <button class="editor-tab" id="tab-raw" onclick="App.switchEditorTab('raw')">RAW Editor</button>
+          </div>
+
+          <div>
+            <button class="primary-btn" id="save-file-btn" onclick="App.saveCurrentFile()">Save File</button>
+          </div>
+        </div>
+
+        <!-- Panes Container -->
+        <div class="pane-content">
+          
+          <!-- PANE: SPECIAL PRIMARY TAB -->
+          <div id="pane-special" style="display: none;">
+            
+            <!-- Shopping List Special View -->
+            <div id="special-shopping-container" class="shopping-list-ui" style="display: none;">
+              <div class="list-add-box">
+                <input type="text" id="add-shopping-input" class="list-input" placeholder="Add an item to the shopping list (press Enter)..." onkeydown="if(event.key==='Enter') App.addShoppingItem()">
+                <button class="primary-btn" onclick="App.addShoppingItem()">Add</button>
+              </div>
+              <div id="special-shopping-items" class="items-group">
+                <!-- Shopping items inserted here -->
+              </div>
+            </div>
+
+            <!-- Recipe Special View -->
+            <div id="special-recipe-container" class="recipe-view-ui" style="display: none;">
+              <div class="recipe-header-card">
+                <h1 id="recipe-title" style="font-size: 1.6rem; color: var(--text-primary);">Recipe Title</h1>
+                <div class="recipe-meta-tags" id="recipe-meta"></div>
+              </div>
+
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                  <h2 style="font-size: 1.15rem; color: var(--accent);">Ingredients (Click to add to Shopping List)</h2>
+                  <button class="action-pill-btn" onclick="App.addAllIngredientsToShopping()">+ Add All to Shopping List</button>
+                </div>
+                <div class="ingredients-list" id="recipe-ingredients"></div>
+              </div>
+
+              <div>
+                <h2 style="font-size: 1.15rem; color: var(--accent); margin-bottom: 0.6rem;">Cooking Instructions</h2>
+                <div class="recipe-steps" id="recipe-instructions"></div>
+              </div>
+            </div>
+
+            <!-- Meal Plan Special View -->
+            <div id="special-mealplan-container" style="display: none;">
+              <h1 id="mealplan-title" style="font-size: 1.5rem; margin-bottom: 1rem;">Meal Plan</h1>
+              <div id="mealplan-days-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;"></div>
+            </div>
+
+            <!-- TODO Special View -->
+            <div id="special-todo-container" style="display: none;" class="shopping-list-ui">
+              <div class="list-add-box">
+                <input type="text" id="add-todo-input" class="list-input" placeholder="Add a new family task (press Enter)..." onkeydown="if(event.key==='Enter') App.addTodoItem()">
+                <button class="primary-btn" onclick="App.addTodoItem()">Add Task</button>
+              </div>
+              <div id="special-todo-items" class="items-group"></div>
+            </div>
+
+            <!-- Calendar Special View -->
+            <div id="special-calendar-container" class="calendar-view-ui" style="display: none;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>Upcoming Family Schedule</h2>
+                <button class="primary-btn" onclick="App.showAddEventModal()">+ Add Event</button>
+              </div>
+              <div class="events-list" id="special-calendar-events"></div>
+            </div>
+
+          </div>
+
+          <!-- PANE: WYSIWYG / RENDERED MARKDOWN -->
+          <div id="pane-wysiwyg" class="wysiwyg-preview" contenteditable="true" spellcheck="false">
+            Loading preview...
+          </div>
+
+          <!-- PANE: RAW EDITOR -->
+          <div id="pane-raw" style="display: none;">
+            <textarea id="raw-editor-text" class="raw-editor-textarea" placeholder="Type markdown content here..."></textarea>
+          </div>
+
+        </div>
+
+        <!-- Embedded AI Chatbox on File -->
+        <div class="ai-chat-card" style="margin-top: 1rem;">
+          <div class="ai-chat-header">
+            <div class="ai-chat-title">
+              <span>🤖</span> InFaPla File Assistant
+            </div>
+            <span class="chat-context-badge" id="file-chat-context-badge">Context: file.md</span>
+          </div>
+
+          <div class="ai-messages-list" id="file-chat-messages" style="max-height: 240px; min-height: 120px;">
+            <div class="chat-message assistant">
+              <div class="message-bubble">
+                Ask me to edit, reorganize, or answer questions about this file. Any changes I make will automatically update your editor!
+              </div>
+            </div>
+          </div>
+
+          <!-- Specific Buttons at bottom of prompt for shopping list -->
+          <div class="ai-actions-row" id="shopping-special-actions" style="display: none;">
+            <button class="action-pill-btn" onclick="App.executeSpecialAction('group_categories')">
+              <span>🏷️</span> Group by categories
+            </button>
+            <button class="action-pill-btn" onclick="App.executeSpecialAction('merge_duplicates')">
+              <span>🔄</span> Merge duplicates
+            </button>
+          </div>
+
+          <form class="ai-input-form" onsubmit="App.handleFileChatSubmit(event)">
+            <input type="text" id="file-chat-input" class="ai-input-field" placeholder="Ask AI to modify or inspect this file..." autocomplete="off">
+            <button type="submit" class="primary-btn" id="file-chat-send-btn">Send</button>
+          </form>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Modal: Add Calendar Event -->
+  <div id="event-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem; width: 90%; max-width: 450px; display: flex; flex-direction: column; gap: 1rem;">
+      <h3 style="font-size: 1.2rem;">Add Calendar Event</h3>
+      <div>
+        <label style="font-size: 0.8rem; color: var(--text-secondary);">Event Title</label>
+        <input type="text" id="modal-ev-title" class="list-input" placeholder="e.g. Doctor appointment">
+      </div>
+      <div>
+        <label style="font-size: 0.8rem; color: var(--text-secondary);">Start Time</label>
+        <input type="datetime-local" id="modal-ev-start" class="list-input">
+      </div>
+      <div>
+        <label style="font-size: 0.8rem; color: var(--text-secondary);">Location</label>
+        <input type="text" id="modal-ev-loc" class="list-input" placeholder="Optional">
+      </div>
+      <div>
+        <label style="font-size: 0.8rem; color: var(--text-secondary);">Description / Notes</label>
+        <input type="text" id="modal-ev-desc" class="list-input" placeholder="Optional">
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
+        <button class="action-pill-btn" onclick="App.closeAddEventModal()">Cancel</button>
+        <button class="primary-btn" onclick="App.submitAddEvent()">Create Event</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Client Application Script -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "infapla"
+version = "0.1.0"
+description = "InFaPla - Intelligent Family Planner"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=2.0",
+]
+
+[project.scripts]
+infapla = "main:main"
