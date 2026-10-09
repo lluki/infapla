@@ -943,8 +943,9 @@ const App = {
 
   async sendOverviewPrompt(promptText) {
     const input = document.getElementById('overview-chat-input');
-    if (input) input.value = '';
+    if (input) input.value = promptText;
     await this.sendChatPrompt(promptText, 'overview-chat-messages');
+    if (input) input.value = '';
   },
 
   toggleFileChatCollapse() {
@@ -970,28 +971,43 @@ const App = {
   },
 
   async executeSpecialAction(action) {
-    this.showToast(`AI agent running: ${action === 'group_categories' ? 'Group by categories' : 'Merge duplicates'}...`, 'info');
-    try {
-      const res = await fetch('/api/chat/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
-      });
-      const data = await res.json();
-      if (data.shopping_data) {
-        this.showToast('Shopping list updated by AI agent!', 'success');
-        await this.syncCurrentFileContent();
-        await this.loadSpecialShoppingUI();
-        this.loadDashboardData();
-      }
-    } catch (e) {
-      this.showToast('Action failed: ' + e.message, 'info');
+    // Ensure chatbox is open so user sees prompt and progress
+    const body = document.getElementById('file-chat-body');
+    const btn = document.getElementById('toggle-chat-collapse');
+    if (body && body.style.display === 'none') {
+      body.style.display = 'block';
+      if (btn) btn.textContent = '▾';
     }
+
+    let promptText = '';
+    if (action === 'group_categories') {
+      promptText = 'Please reorganize the shopping list in shopping/list.md by supermarket categories (Produce, Dairy, Pantry, Meat, Frozen, Household, etc.), keeping completed items at the bottom.';
+    } else if (action === 'merge_duplicates') {
+      promptText = 'Please merge duplicate items in the shopping list in shopping/list.md (combine quantities or remove duplicate mentions), keeping completed items at the bottom.';
+    } else {
+      promptText = action;
+    }
+
+    const input = document.getElementById('file-chat-input');
+    if (input) input.value = promptText;
+
+    // Send through chatbox so the user sees the prompt and when it's done
+    await this.sendChatPrompt(promptText, 'file-chat-messages', this.state.currentFilePath, this.state.currentFileContent);
+    if (input) input.value = '';
   },
 
   async sendChatPrompt(prompt, containerId, filePath = null, fileContent = null) {
     const container = document.getElementById(containerId);
     if (!container) return;
+
+    // Disable inputs while running
+    const isOverview = (containerId === 'overview-chat-messages');
+    const sendBtn = document.getElementById(isOverview ? 'overview-chat-send-btn' : 'file-chat-send-btn');
+    const inputField = document.getElementById(isOverview ? 'overview-chat-input' : 'file-chat-input');
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Running...';
+    }
 
     // Append user message
     const userMsg = document.createElement('div');
@@ -999,14 +1015,20 @@ const App = {
     userMsg.innerHTML = `<div class="message-bubble">${prompt}</div>`;
     container.appendChild(userMsg);
 
-    // Append assistant bubble
+    // Append assistant bubble with running status
     const assistantMsg = document.createElement('div');
     assistantMsg.className = 'chat-message assistant';
-    assistantMsg.innerHTML = `<div class="message-bubble"><em>Thinking...</em></div>`;
+    assistantMsg.innerHTML = `
+      <div class="message-bubble">
+        <div class="message-text"><em>Thinking...</em></div>
+        <div class="message-status running"><span>⏳</span> <span>Working on your request...</span></div>
+      </div>
+    `;
     container.appendChild(assistantMsg);
     container.scrollTop = container.scrollHeight;
 
-    const bubble = assistantMsg.querySelector('.message-bubble');
+    const textDiv = assistantMsg.querySelector('.message-text');
+    const statusDiv = assistantMsg.querySelector('.message-status');
 
     try {
       const response = await fetch('/api/chat', {
@@ -1023,7 +1045,7 @@ const App = {
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let responseText = '';
-      bubble.textContent = '';
+      textDiv.textContent = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -1037,13 +1059,23 @@ const App = {
               const eventData = JSON.parse(line.substring(6));
               if (eventData.type === 'chunk') {
                 responseText += eventData.text;
-                bubble.innerHTML = this.parseMarkdownToHTML(responseText);
+                textDiv.innerHTML = this.parseMarkdownToHTML(responseText);
                 container.scrollTop = container.scrollHeight;
               } else if (eventData.type === 'done') {
-                if (eventData.files_modified && eventData.files_modified.length > 0) {
-                  this.showToast(`AI agent updated: ${eventData.files_modified.join(', ')}`, 'success');
+                const modFiles = eventData.files_modified || [];
+                if (statusDiv) {
+                  statusDiv.className = 'message-status done';
+                  if (modFiles.length > 0) {
+                    statusDiv.innerHTML = `<span>✓</span> <span>Done • Updated ${modFiles.join(', ')}</span>`;
+                  } else {
+                    statusDiv.innerHTML = `<span>✓</span> <span>Done</span>`;
+                  }
+                }
+
+                if (modFiles.length > 0) {
+                  this.showToast(`AI agent updated: ${modFiles.join(', ')}`, 'success');
                   // If current file was modified, reload editor view
-                  if (this.state.currentFilePath && eventData.files_modified.includes(this.state.currentFilePath)) {
+                  if (this.state.currentFilePath && modFiles.includes(this.state.currentFilePath)) {
                     await this.syncCurrentFileContent();
                     if (['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].includes(this.state.currentFileType)) {
                       this.renderSpecialView(this.state.currentFileType, this.state.currentFilePath, this.state.currentFileContent);
@@ -1053,7 +1085,11 @@ const App = {
                   this.checkGitStatus();
                 }
               } else if (eventData.type === 'error') {
-                bubble.innerHTML = `<span style="color:var(--danger)">Error: ${eventData.error}</span>`;
+                if (statusDiv) {
+                  statusDiv.className = 'message-status';
+                  statusDiv.style.color = 'var(--danger)';
+                  statusDiv.innerHTML = `<span>✕</span> <span>Error: ${eventData.error}</span>`;
+                }
               }
             } catch (err) {
               // Ignore non-json chunks
@@ -1062,12 +1098,23 @@ const App = {
         }
       }
 
-      if (!responseText) {
-        bubble.textContent = 'Agent completed turn without text output.';
+      if (!responseText && statusDiv && statusDiv.className.includes('running')) {
+        statusDiv.className = 'message-status done';
+        statusDiv.innerHTML = `<span>✓</span> <span>Done</span>`;
       }
 
     } catch (e) {
-      bubble.innerHTML = `<span style="color:var(--danger)">Connection error: ${e.message}</span>`;
+      if (statusDiv) {
+        statusDiv.className = 'message-status';
+        statusDiv.style.color = 'var(--danger)';
+        statusDiv.innerHTML = `<span>✕</span> <span>Connection error: ${e.message}</span>`;
+      }
+    } finally {
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+      }
+      container.scrollTop = container.scrollHeight;
     }
   }
 };
