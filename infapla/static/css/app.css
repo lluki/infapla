@@ -242,6 +242,7 @@ body {
   gap: 0.75rem;
   box-shadow: var(--shadow-sm);
   transition: transform 0.15s, border-color 0.15s;
+  overflow: hidden;
 }
 
 .dash-card:hover {
@@ -277,7 +278,10 @@ body {
   gap: 0.4rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
-  min-height: 80px;
+  min-height: 60px;
+  max-height: 140px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .card-footer {
@@ -447,8 +451,9 @@ body {
 .editor-view-container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  height: 100%;
+  gap: 1.25rem;
+  width: 100%;
+  min-height: auto;
 }
 
 .editor-toolbar {
@@ -460,6 +465,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .editor-file-info {
@@ -524,7 +530,9 @@ body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 1.5rem;
-  min-height: 400px;
+  min-height: auto;
+  box-shadow: var(--shadow-sm);
+  overflow: visible;
 }
 
 /* Specialized Shopping List UI */
@@ -532,11 +540,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  width: 100%;
 }
 
 .list-add-box {
   display: flex;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .list-input {
@@ -553,6 +563,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .category-header {

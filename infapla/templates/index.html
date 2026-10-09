@@ -78,6 +78,37 @@
       <!-- ================= VIEW 1: OVERVIEW DASHBOARD ================= -->
       <section id="view-overview" style="display: flex; flex-direction: column; gap: 1.5rem;">
         
+        <!-- AI Assistant Chatbot in Overview (ON VERY TOP) -->
+        <div class="ai-chat-card">
+          <div class="ai-chat-header">
+            <div class="ai-chat-title">
+              <span>🤖</span> InFaPla AI Family Assistant
+            </div>
+            <span class="chat-context-badge">Full Workspace Access (Bubblewrap Sandboxed)</span>
+          </div>
+
+          <div class="ai-messages-list" id="overview-chat-messages">
+            <div class="chat-message assistant">
+              <div class="message-bubble">
+                Hello! I am your family's intelligent planner assistant. I have direct access to your shopping list, meal plans, recipes, tasks, and calendar events. How can I help you today?
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Suggestion Chips -->
+          <div class="ai-actions-row">
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What meals are planned for this week?')">🍲 Weekly meals?</button>
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What items are still pending on the shopping list?')">🛒 What to buy?</button>
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What family tasks are open?')">📋 Open tasks?</button>
+            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('Suggest a quick 20-minute dinner recipe using our pantry items.')">💡 Quick dinner idea</button>
+          </div>
+
+          <form class="ai-input-form" onsubmit="App.handleOverviewChatSubmit(event)">
+            <input type="text" id="overview-chat-input" class="ai-input-field" placeholder="Ask anything about shopping, recipes, calendar, or tasks..." autocomplete="off">
+            <button type="submit" class="primary-btn" id="overview-chat-send-btn">Send</button>
+          </form>
+        </div>
+
         <!-- Summary Cards Grid -->
         <div class="dashboard-grid">
           
@@ -138,37 +169,6 @@
 
         </div>
 
-        <!-- AI Assistant Chatbot in Overview -->
-        <div class="ai-chat-card">
-          <div class="ai-chat-header">
-            <div class="ai-chat-title">
-              <span>🤖</span> InFaPla AI Family Assistant
-            </div>
-            <span class="chat-context-badge">Full Workspace Access (Bubblewrap Sandboxed)</span>
-          </div>
-
-          <div class="ai-messages-list" id="overview-chat-messages">
-            <div class="chat-message assistant">
-              <div class="message-bubble">
-                Hello! I am your family's intelligent planner assistant. I have direct access to your shopping list, meal plans, recipes, tasks, and calendar events. How can I help you today?
-              </div>
-            </div>
-          </div>
-
-          <!-- Quick Suggestion Chips -->
-          <div class="ai-actions-row">
-            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What meals are planned for this week?')">🍲 Weekly meals?</button>
-            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What items are still pending on the shopping list?')">🛒 What to buy?</button>
-            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('What family tasks are open?')">📋 Open tasks?</button>
-            <button class="action-pill-btn" onclick="App.sendOverviewPrompt('Suggest a quick 20-minute dinner recipe using our pantry items.')">💡 Quick dinner idea</button>
-          </div>
-
-          <form class="ai-input-form" onsubmit="App.handleOverviewChatSubmit(event)">
-            <input type="text" id="overview-chat-input" class="ai-input-field" placeholder="Ask anything about shopping, recipes, calendar, or tasks..." autocomplete="off">
-            <button type="submit" class="primary-btn" id="overview-chat-send-btn">Send</button>
-          </form>
-        </div>
-
       </section>
 
       <!-- ================= VIEW 2: FILE VIEWER / EDITOR ================= -->
@@ -192,6 +192,44 @@
 
           <div>
             <button class="primary-btn" id="save-file-btn" onclick="App.saveCurrentFile()">Save File</button>
+          </div>
+        </div>
+
+        <!-- Embedded AI Chatbox on File (ON VERY TOP OF EDITOR VIEW) -->
+        <div class="ai-chat-card" id="file-chat-card">
+          <div class="ai-chat-header">
+            <div class="ai-chat-title">
+              <span>🤖</span> InFaPla File Assistant
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span class="chat-context-badge" id="file-chat-context-badge">Context: file.md</span>
+              <button class="action-pill-btn" id="toggle-chat-collapse" onclick="App.toggleFileChatCollapse()" title="Minimize/expand AI assistant">▾</button>
+            </div>
+          </div>
+
+          <div id="file-chat-body">
+            <div class="ai-messages-list" id="file-chat-messages" style="max-height: 200px; min-height: 90px;">
+              <div class="chat-message assistant">
+                <div class="message-bubble">
+                  Ask me to edit, reorganize, or answer questions about this file. Any changes I make will automatically update your editor!
+                </div>
+              </div>
+            </div>
+
+            <!-- Specific Buttons at bottom of prompt for shopping list -->
+            <div class="ai-actions-row" id="shopping-special-actions" style="display: none;">
+              <button class="action-pill-btn" onclick="App.executeSpecialAction('group_categories')">
+                <span>🏷️</span> Group by categories
+              </button>
+              <button class="action-pill-btn" onclick="App.executeSpecialAction('merge_duplicates')">
+                <span>🔄</span> Merge duplicates
+              </button>
+            </div>
+
+            <form class="ai-input-form" onsubmit="App.handleFileChatSubmit(event)">
+              <input type="text" id="file-chat-input" class="ai-input-field" placeholder="Ask AI to modify or inspect this file..." autocomplete="off">
+              <button type="submit" class="primary-btn" id="file-chat-send-btn">Send</button>
+            </form>
           </div>
         </div>
 
@@ -269,39 +307,6 @@
             <textarea id="raw-editor-text" class="raw-editor-textarea" placeholder="Type markdown content here..."></textarea>
           </div>
 
-        </div>
-
-        <!-- Embedded AI Chatbox on File -->
-        <div class="ai-chat-card" style="margin-top: 1rem;">
-          <div class="ai-chat-header">
-            <div class="ai-chat-title">
-              <span>🤖</span> InFaPla File Assistant
-            </div>
-            <span class="chat-context-badge" id="file-chat-context-badge">Context: file.md</span>
-          </div>
-
-          <div class="ai-messages-list" id="file-chat-messages" style="max-height: 240px; min-height: 120px;">
-            <div class="chat-message assistant">
-              <div class="message-bubble">
-                Ask me to edit, reorganize, or answer questions about this file. Any changes I make will automatically update your editor!
-              </div>
-            </div>
-          </div>
-
-          <!-- Specific Buttons at bottom of prompt for shopping list -->
-          <div class="ai-actions-row" id="shopping-special-actions" style="display: none;">
-            <button class="action-pill-btn" onclick="App.executeSpecialAction('group_categories')">
-              <span>🏷️</span> Group by categories
-            </button>
-            <button class="action-pill-btn" onclick="App.executeSpecialAction('merge_duplicates')">
-              <span>🔄</span> Merge duplicates
-            </button>
-          </div>
-
-          <form class="ai-input-form" onsubmit="App.handleFileChatSubmit(event)">
-            <input type="text" id="file-chat-input" class="ai-input-field" placeholder="Ask AI to modify or inspect this file..." autocomplete="off">
-            <button type="submit" class="primary-btn" id="file-chat-send-btn">Send</button>
-          </form>
         </div>
 
       </section>

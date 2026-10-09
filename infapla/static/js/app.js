@@ -306,14 +306,8 @@ const App = {
           calendar: '📅 Family Schedule'
         };
         tabSpecial.textContent = labels[data.type] || 'Special View';
-        
-        // For Calendar: spec states MD viewer should NOT be active, instead display simple next events list!
-        if (data.type === 'calendar') {
-          this.switchEditorTab('special');
-        } else {
-          // Default tab: WYSIWYG view is active by default as per spec!
-          this.switchEditorTab('wysiwyg');
-        }
+        // Default to interactive mode for special files (shopping list, tasks, calendar, recipes, mealplan)
+        this.switchEditorTab('special');
         this.renderSpecialView(data.type, path, data.content);
       } else {
         tabSpecial.style.display = 'none';
@@ -951,6 +945,19 @@ const App = {
     const input = document.getElementById('overview-chat-input');
     if (input) input.value = '';
     await this.sendChatPrompt(promptText, 'overview-chat-messages');
+  },
+
+  toggleFileChatCollapse() {
+    const body = document.getElementById('file-chat-body');
+    const btn = document.getElementById('toggle-chat-collapse');
+    if (!body || !btn) return;
+    if (body.style.display === 'none') {
+      body.style.display = 'block';
+      btn.textContent = '▾';
+    } else {
+      body.style.display = 'none';
+      btn.textContent = '▸';
+    }
   },
 
   async handleFileChatSubmit(e) {
