@@ -8,6 +8,7 @@ const App = {
     currentTab: 'wysiwyg',
     files: [],
     gitDirty: false,
+    expandedFolders: new Set(),
   },
 
   init() {
@@ -94,10 +95,56 @@ const App = {
     }
   },
 
+  toggleFolder(folderPath) {
+    if (this.state.expandedFolders.has(folderPath)) {
+      this.state.expandedFolders.delete(folderPath);
+    } else {
+      this.state.expandedFolders.add(folderPath);
+    }
+    this.renderFileTree();
+  },
+
+  buildFileTree(files) {
+    const root = { name: '', path: '', isDir: true, subdirs: {}, files: [] };
+
+    files.forEach(f => {
+      const parts = f.path.split('/');
+      let current = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const seg = parts[i];
+        const segPath = parts.slice(0, i + 1).join('/');
+        if (!current.subdirs[seg]) {
+          current.subdirs[seg] = {
+            name: seg,
+            path: segPath,
+            isDir: true,
+            subdirs: {},
+            files: []
+          };
+        }
+        current = current.subdirs[seg];
+      }
+      const fileName = parts[parts.length - 1];
+      current.files.push({ ...f, displayName: fileName });
+    });
+
+    return root;
+  },
+
+  countFilesRecursive(node) {
+    let count = node.files.length;
+    for (const sub of Object.values(node.subdirs)) {
+      count += this.countFilesRecursive(sub);
+    }
+    return count;
+  },
+
   renderFileTree() {
     const list = document.getElementById('file-tree-list');
     if (!list) return;
     list.innerHTML = '';
+
+    const rootNode = this.buildFileTree(this.state.files);
 
     const iconMap = {
       shopping: '🛒',
@@ -109,24 +156,71 @@ const App = {
       generic: '📄'
     };
 
-    this.state.files.forEach(f => {
-      const li = document.createElement('li');
-      li.className = `file-tree-item ${this.state.currentFilePath === f.path ? 'active' : ''}`;
-      const isSpecial = ['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].includes(f.type);
-      if (isSpecial) li.classList.add('special-folder');
+    const folderIconMap = {
+      'shopping': '🛒',
+      'shopping/recipes': '🍲',
+      'shopping/mealplan': '📋',
+      'todo': '✅',
+      'calendar': '📅'
+    };
 
-      const icon = iconMap[f.type] || '📄';
-      li.innerHTML = `
-        <span>${icon}</span>
-        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.path}</span>
-      `;
-      li.onclick = () => {
-        const sidebar = document.getElementById('app-sidebar');
-        if (sidebar) sidebar.classList.remove('open');
-        this.openFile(f.path);
-      };
-      list.appendChild(li);
-    });
+    const renderNode = (node, container) => {
+      // 1. Render Subfolders first
+      const subFolderKeys = Object.keys(node.subdirs).sort();
+      subFolderKeys.forEach(key => {
+        const folder = node.subdirs[key];
+        const isExpanded = this.state.expandedFolders.has(folder.path);
+        const folderTotal = this.countFilesRecursive(folder);
+
+        const folderEl = document.createElement('div');
+        folderEl.className = 'folder-tree-item';
+        const fIcon = folderIconMap[folder.path] || (isExpanded ? '📂' : '📁');
+
+        folderEl.innerHTML = `
+          <span class="folder-chevron">${isExpanded ? '▾' : '▸'}</span>
+          <span>${fIcon}</span>
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${folder.name}/</span>
+          <span class="folder-count-badge">${folderTotal}</span>
+        `;
+        folderEl.onclick = (e) => {
+          e.stopPropagation();
+          this.toggleFolder(folder.path);
+        };
+        container.appendChild(folderEl);
+
+        // If folder is expanded, render its children
+        if (isExpanded) {
+          const childrenDiv = document.createElement('div');
+          childrenDiv.className = 'folder-children';
+          renderNode(folder, childrenDiv);
+          container.appendChild(childrenDiv);
+        }
+      });
+
+      // 2. Render Direct Files in this folder
+      const sortedFiles = [...node.files].sort((a, b) => a.displayName.localeCompare(b.displayName));
+      sortedFiles.forEach(f => {
+        const itemEl = document.createElement('div');
+        itemEl.className = `file-tree-item ${this.state.currentFilePath === f.path ? 'active' : ''}`;
+        const isSpecial = ['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].includes(f.type);
+        if (isSpecial) itemEl.classList.add('special-folder');
+
+        const icon = iconMap[f.type] || '📄';
+        itemEl.innerHTML = `
+          <span>${icon}</span>
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.displayName}</span>
+        `;
+        itemEl.onclick = (e) => {
+          e.stopPropagation();
+          const sidebar = document.getElementById('app-sidebar');
+          if (sidebar) sidebar.classList.remove('open');
+          this.openFile(f.path);
+        };
+        container.appendChild(itemEl);
+      });
+    };
+
+    renderNode(rootNode, list);
   },
 
   async loadDashboardData() {
@@ -287,6 +381,12 @@ const App = {
     document.getElementById('editor-current-path').textContent = path;
     const ctxBadge = document.getElementById('file-chat-context-badge');
     if (ctxBadge) ctxBadge.textContent = `Context: ${path}`;
+
+    // Automatically expand parent folders so opened file is visible in tree
+    const pathParts = path.split('/');
+    for (let i = 1; i < pathParts.length; i++) {
+      this.state.expandedFolders.add(pathParts.slice(0, i).join('/'));
+    }
 
     this.renderFileTree();
 

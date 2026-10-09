@@ -214,6 +214,53 @@ body {
   border-radius: 4px;
 }
 
+.folder-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.folder-tree-item:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--accent);
+}
+
+.folder-chevron {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.folder-count-badge {
+  margin-left: auto;
+  font-size: 0.7rem;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.folder-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-left: 0.75rem;
+  margin-left: 0.5rem;
+  border-left: 1px dashed var(--border-color);
+}
+
 /* Main Viewport */
 .app-main {
   flex: 1;
