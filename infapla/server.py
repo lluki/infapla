@@ -26,6 +26,15 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     def index():
         return render_template("index.html")
 
+    @app.route("/api/info", methods=["GET"])
+    def get_info():
+        return jsonify({
+            "model": sandbox.model,
+            "effort": sandbox.effort,
+            "data_dir": str(storage.data_dir),
+            "telegram_active": daemon.telegram.is_configured()
+        })
+
     # File endpoints
     @app.route("/api/files", methods=["GET"])
     def list_files():

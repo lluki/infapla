@@ -25,8 +25,16 @@ Always keep Markdown files clean, well-structured, and easy to read.
 """
 
 class SandboxRunner:
-    def __init__(self, data_dir: Path, script_path: Optional[Path] = None):
+    def __init__(
+        self,
+        data_dir: Path,
+        script_path: Optional[Path] = None,
+        model: Optional[str] = None,
+        effort: Optional[str] = None
+    ):
         self.data_dir = Path(data_dir).resolve()
+        self.model = model or os.environ.get("AGY_MODEL", "gemini-3.8-flash-low")
+        self.effort = effort or os.environ.get("AGY_EFFORT", "low")
         if script_path and Path(script_path).exists():
             self.script_path = Path(script_path).resolve()
         else:
@@ -87,6 +95,8 @@ class SandboxRunner:
 
         cmd = [
             str(self.script_path),
+            "--model", self.model,
+            "--effort", self.effort,
             "--input-format", "stream-json",
             "--output-format", "stream-json"
         ]

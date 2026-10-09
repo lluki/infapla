@@ -63,8 +63,24 @@ const App = {
       this.loadFiles(),
       this.loadDashboardData(),
       this.loadGitHistory(),
-      this.checkGitStatus()
+      this.checkGitStatus(),
+      this.loadAppInfo()
     ]);
+  },
+
+  async loadAppInfo() {
+    try {
+      const res = await fetch('/api/info');
+      const data = await res.json();
+      const badge = document.getElementById('ai-model-badge');
+      if (badge && data.model) {
+        const shortModel = data.model.replace('gemini-', '').replace('-low', ' (Fast)');
+        badge.textContent = `⚡ ${shortModel}`;
+        badge.title = `Model: ${data.model} | Effort: ${data.effort}`;
+      }
+    } catch (e) {
+      console.error('Info load error:', e);
+    }
   },
 
   async loadFiles() {

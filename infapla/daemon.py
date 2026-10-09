@@ -14,8 +14,13 @@ class InFaPlaDaemon:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or default_config
         self.storage = Storage(self.config.data_dir)
+        self.sandbox = SandboxRunner(
+            self.config.data_dir,
+            self.config.sandbox_script,
+            model=self.config.agy_model,
+            effort=self.config.agy_effort
+        )
         self.git_manager = GitManager(self.config.data_dir)
-        self.sandbox = SandboxRunner(self.config.data_dir, self.config.sandbox_script)
         self.committer = PeriodicCommitter(self.git_manager, self.config.git_commit_interval)
         self.telegram = TelegramBot(self.config.telegram_bot_token, self.storage, self.sandbox)
         self._is_running = False

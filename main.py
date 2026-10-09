@@ -13,6 +13,8 @@ def main():
     parser.add_argument("--port", type=int, default=None, help="HTTP port (default: 8080)")
     parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
     parser.add_argument("--git-interval", type=int, default=None, help="Git auto-commit interval in seconds (default: 30)")
+    parser.add_argument("--model", default=None, help="agy model (default: gemini-3.8-flash-low)")
+    parser.add_argument("--effort", default=None, help="agy reasoning effort: low|medium|high (default: low)")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     args = parser.parse_args()
@@ -33,6 +35,10 @@ def main():
         cfg.telegram_bot_token = args.telegram_token
     if args.git_interval:
         cfg.git_commit_interval = args.git_interval
+    if args.model:
+        cfg.agy_model = args.model
+    if args.effort:
+        cfg.agy_effort = args.effort
     if args.debug:
         cfg.debug = True
 

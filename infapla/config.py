@@ -13,6 +13,8 @@ class Config:
     telegram_bot_token: str = field(default_factory=lambda: os.environ.get("TELEGRAM_BOT_TOKEN", "").strip())
     sandbox_script: Path = field(default_factory=lambda: (BASE_DIR / "run-agy-sandboxed.sh").resolve())
     agy_bin: str = field(default_factory=lambda: os.environ.get("AGY_BIN", "agy"))
+    agy_model: str = field(default_factory=lambda: os.environ.get("AGY_MODEL", "gemini-3.8-flash-low"))
+    agy_effort: str = field(default_factory=lambda: os.environ.get("AGY_EFFORT", "low"))
     debug: bool = field(default_factory=lambda: os.environ.get("DEBUG", "0").lower() in ("1", "true", "yes"))
 
 default_config = Config()
