@@ -52,12 +52,12 @@ const App = {
       });
     }
 
-    // WYSIWYG input listener
-    const wysiwygPane = document.getElementById('pane-wysiwyg');
-    if (wysiwygPane) {
-      wysiwygPane.addEventListener('input', () => {
+    // Visual (WYSIWYG) input listener
+    const wysiwygContent = document.getElementById('wysiwyg-content');
+    if (wysiwygContent) {
+      wysiwygContent.addEventListener('input', () => {
         // Simple text synchronization
-        this.state.currentFileContent = wysiwygPane.innerText;
+        this.state.currentFileContent = wysiwygContent.innerText;
         if (rawEditor) rawEditor.value = this.state.currentFileContent;
       });
     }
@@ -695,13 +695,13 @@ const App = {
       if (isSpecial) {
         tabSpecial.style.display = 'inline-block';
         const labels = {
-          shopping: '🛒 Interactive Shopping List',
-          recipe: '🍲 Recipe View',
-          mealplan: '📋 Meal Planner',
-          todo: '✅ Interactive Tasks',
-          calendar: '📅 Family Schedule'
+          shopping: '🛒 Interactive',
+          recipe: '🍲 Interactive',
+          mealplan: '📋 Interactive',
+          todo: '✅ Interactive',
+          calendar: '📅 Interactive'
         };
-        tabSpecial.textContent = labels[data.type] || 'Special View';
+        tabSpecial.textContent = labels[data.type] || '✨ Interactive';
         // Default to interactive mode for special files (shopping list, tasks, calendar, recipes, mealplan)
         this.switchEditorTab('special');
         this.renderSpecialView(data.type, path, data.content);
@@ -734,20 +734,20 @@ const App = {
       paneSpecial.style.display = 'block';
     } else if (tabName === 'raw') {
       tabRaw.classList.add('active');
-      paneRaw.style.display = 'block';
+      paneRaw.style.display = 'flex';
       const rawTextarea = document.getElementById('raw-editor-text');
       if (rawTextarea) rawTextarea.value = this.state.currentFileContent;
     } else {
       tabWysiwyg.classList.add('active');
-      paneWysiwyg.style.display = 'block';
+      paneWysiwyg.style.display = 'flex';
       this.renderWYSIWYG(this.state.currentFileContent);
     }
   },
 
   renderWYSIWYG(markdownText) {
-    const pane = document.getElementById('pane-wysiwyg');
-    if (!pane) return;
-    pane.innerHTML = this.parseMarkdownToHTML(markdownText);
+    const content = document.getElementById('wysiwyg-content');
+    if (!content) return;
+    content.innerHTML = this.parseMarkdownToHTML(markdownText);
   },
 
   parseMarkdownToHTML(md) {

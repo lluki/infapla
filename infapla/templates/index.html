@@ -174,15 +174,11 @@
 
           <div class="tab-bar">
             <!-- Dynamic Primary Special Tab -->
-            <button class="editor-tab primary-special" id="tab-special" onclick="App.switchEditorTab('special')">Interactive View</button>
-            <!-- Default WYSIWYG / Rendered Tab -->
-            <button class="editor-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Preview</button>
+            <button class="editor-tab primary-special" id="tab-special" onclick="App.switchEditorTab('special')">✨ Interactive</button>
+            <!-- Visual / Rendered Tab -->
+            <button class="editor-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Visual</button>
             <!-- RAW Editor Tab -->
-            <button class="editor-tab" id="tab-raw" onclick="App.switchEditorTab('raw')">RAW Editor</button>
-          </div>
-
-          <div>
-            <button class="primary-btn" id="save-file-btn" onclick="App.saveCurrentFile()">Save File</button>
+            <button class="editor-tab" id="tab-raw" onclick="App.switchEditorTab('raw')">Raw</button>
           </div>
         </div>
 
@@ -289,13 +285,21 @@
           </div>
 
           <!-- PANE: WYSIWYG / RENDERED MARKDOWN -->
-          <div id="pane-wysiwyg" class="wysiwyg-preview" contenteditable="true" spellcheck="false">
-            Loading preview...
+          <div id="pane-wysiwyg" style="display: flex; flex-direction: column; gap: 1rem;">
+            <div id="wysiwyg-content" class="wysiwyg-preview" contenteditable="true" spellcheck="false">
+              Loading preview...
+            </div>
+            <div class="pane-action-bar">
+              <button class="primary-btn" onclick="App.saveCurrentFile()">Save File</button>
+            </div>
           </div>
 
           <!-- PANE: RAW EDITOR -->
-          <div id="pane-raw" style="display: none;">
+          <div id="pane-raw" style="display: none; flex-direction: column; gap: 1rem;">
             <textarea id="raw-editor-text" class="raw-editor-textarea" placeholder="Type markdown content here..."></textarea>
+            <div class="pane-action-bar">
+              <button class="primary-btn" onclick="App.saveCurrentFile()">Save File</button>
+            </div>
           </div>
 
         </div>

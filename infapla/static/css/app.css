@@ -812,6 +812,13 @@ body {
   overflow: visible;
 }
 
+.pane-action-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
 /* Specialized Shopping List UI */
 .shopping-list-ui {
   display: flex;
