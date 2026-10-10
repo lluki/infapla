@@ -116,6 +116,11 @@ class TestServerAPI(unittest.TestCase):
 
         res_commit = self.client.post("/api/git/commit", json={"message": "Test commit"})
         self.assertEqual(res_commit.status_code, 200)
+        c_hash = res_commit.get_json()["commit"]
+
+        res_diff = self.client.get(f"/api/git/diff?commit={c_hash}")
+        self.assertEqual(res_diff.status_code, 200)
+        self.assertIn("diff", res_diff.get_json())
 
 if __name__ == "__main__":
     unittest.main()

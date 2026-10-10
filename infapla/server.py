@@ -107,6 +107,16 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         commits = git_mgr.get_history(limit=limit, file_path=file_path)
         return jsonify({"commits": commits})
 
+    @app.route("/api/git/diff", methods=["GET"])
+    def git_diff():
+        commit_hash = request.args.get("commit")
+        file_path = request.args.get("file")
+        if commit_hash:
+            diff_text = git_mgr.get_commit_diff(commit_hash, file_path=file_path)
+        else:
+            diff_text = git_mgr.get_diff(file_path=file_path)
+        return jsonify({"diff": diff_text})
+
     @app.route("/api/git/last-edited", methods=["GET"])
     def git_last_edited():
         limit = int(request.args.get("limit", 15))

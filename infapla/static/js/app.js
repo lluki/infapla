@@ -9,6 +9,10 @@ const App = {
     files: [],
     gitDirty: false,
     expandedFolders: new Set(),
+    currentDiffHash: null,
+    currentDiffMessage: '',
+    currentDiffRaw: '',
+    diffFormat: 'side-by-side',
   },
 
   init() {
@@ -19,11 +23,19 @@ const App = {
   },
 
   bindEvents() {
-    const mobileToggle = document.getElementById('mobile-toggle');
-    const sidebar = document.getElementById('app-sidebar');
-    if (mobileToggle && sidebar) {
-      mobileToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('open');
+    // Diff modal click outside or ESC to close
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.closeDiffModal();
+      }
+    });
+
+    const diffModal = document.getElementById('diff-modal');
+    if (diffModal) {
+      diffModal.addEventListener('click', (e) => {
+        if (e.target === diffModal) {
+          this.closeDiffModal();
+        }
       });
     }
 
@@ -63,7 +75,7 @@ const App = {
     await Promise.all([
       this.loadFiles(),
       this.loadDashboardData(),
-      this.loadGitHistory(),
+      this.loadRecentChanges(),
       this.checkGitStatus(),
       this.loadAppInfo()
     ]);
@@ -140,7 +152,7 @@ const App = {
   },
 
   renderFileTree() {
-    const list = document.getElementById('file-tree-list');
+    const list = document.getElementById('overview-folders-content');
     if (!list) return;
     list.innerHTML = '';
 
@@ -179,8 +191,8 @@ const App = {
         folderEl.innerHTML = `
           <span class="folder-chevron">${isExpanded ? '▾' : '▸'}</span>
           <span>${fIcon}</span>
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${folder.name}/</span>
-          <span class="folder-count-badge">${folderTotal}</span>
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">${folder.name}/</span>
+          <span class="folder-count-badge">${folderTotal} ${folderTotal === 1 ? 'file' : 'files'}</span>
         `;
         folderEl.onclick = (e) => {
           e.stopPropagation();
@@ -212,15 +224,16 @@ const App = {
         `;
         itemEl.onclick = (e) => {
           e.stopPropagation();
-          const sidebar = document.getElementById('app-sidebar');
-          if (sidebar) sidebar.classList.remove('open');
           this.openFile(f.path);
         };
         container.appendChild(itemEl);
       });
     };
 
-    renderNode(rootNode, list);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'overview-folders-grid';
+    renderNode(rootNode, wrapper);
+    list.appendChild(wrapper);
   },
 
   async loadDashboardData() {
@@ -295,27 +308,148 @@ const App = {
     }
   },
 
-  async loadGitHistory() {
+  async loadRecentChanges() {
+    const container = document.getElementById('recent-changes-content');
+    if (!container) return;
     try {
-      const res = await fetch('/api/git/history?limit=10');
+      const res = await fetch('/api/git/history?limit=5');
       const data = await res.json();
-      const list = document.getElementById('git-history-list');
-      if (!list) return;
-      list.innerHTML = '';
-      (data.commits || []).forEach(c => {
-        const li = document.createElement('li');
-        li.className = 'file-tree-item';
-        li.style.flexDirection = 'column';
-        li.style.alignItems = 'flex-start';
-        li.innerHTML = `
-          <div style="font-weight: 600; color: var(--text-primary); font-size: 0.75rem;">${c.message}</div>
-          <div style="color: var(--text-muted); font-size: 0.7rem;">${c.short_hash} • ${c.date}</div>
+      const commits = data.commits || [];
+
+      if (commits.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;"><em>No commit history yet.</em></div>';
+        return;
+      }
+
+      container.innerHTML = '';
+      commits.forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'commit-row';
+
+        // Format files chips
+        let filesHtml = '';
+        if (c.files && c.files.length > 0) {
+          filesHtml = `
+            <div class="commit-files">
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Files changed:</span>
+              ${c.files.map(f => `
+                <button class="file-tag-btn" onclick="App.openFile('${f}')" title="Open ${f}">
+                  <span>📄</span> <span>${f}</span>
+                </button>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        row.innerHTML = `
+          <div class="commit-top">
+            <div class="commit-message">
+              <span>📌</span>
+              <span>${c.message || 'No commit message'}</span>
+            </div>
+            <div class="commit-meta">
+              <span class="commit-hash-pill" title="Commit Hash">${c.short_hash}</span>
+              <span>by ${c.author || 'Family'}</span>
+              <span>• ${c.date}</span>
+              <button class="primary-btn" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="App.showCommitDiff('${c.hash}', '${encodeURIComponent(c.message || '')}')">
+                Diff
+              </button>
+            </div>
+          </div>
+          ${filesHtml}
         `;
-        list.appendChild(li);
+        container.appendChild(row);
       });
     } catch (e) {
-      console.error('Git history load error:', e);
+      console.error('Recent changes load error:', e);
+      container.innerHTML = '<div style="color: var(--danger); font-size: 0.85rem;">Failed to load recent changes.</div>';
     }
+  },
+
+  async showCommitDiff(commitHash, encodedMsg) {
+    const modal = document.getElementById('diff-modal');
+    const content = document.getElementById('diff-modal-content');
+    const title = document.getElementById('diff-modal-title');
+    const subtitle = document.getElementById('diff-modal-subtitle');
+    if (!modal || !content) return;
+
+    this.state.currentDiffHash = commitHash;
+    const msg = decodeURIComponent(encodedMsg || '');
+    this.state.currentDiffMessage = msg;
+
+    if (title) title.textContent = msg ? `Diff: ${msg}` : `Diff for ${commitHash.substring(0, 7)}`;
+    if (subtitle) subtitle.textContent = `Commit ${commitHash}`;
+    content.innerHTML = '<div style="padding: 2.5rem; text-align: center; color: var(--text-muted);">Fetching commit diff...</div>';
+    modal.style.display = 'flex';
+
+    try {
+      const res = await fetch(`/api/git/diff?commit=${encodeURIComponent(commitHash)}`);
+      const data = await res.json();
+      this.state.currentDiffRaw = data.diff || '';
+      this.renderDiff();
+    } catch (e) {
+      console.error('Failed to load commit diff:', e);
+      content.innerHTML = `<div style="padding: 2rem; color: var(--danger);">Failed to load diff: ${e.message}</div>`;
+    }
+  },
+
+  renderDiff() {
+    const content = document.getElementById('diff-modal-content');
+    if (!content) return;
+
+    const diffText = this.state.currentDiffRaw;
+    if (!diffText || !diffText.trim()) {
+      content.innerHTML = '<div style="padding: 2.5rem; text-align: center; color: var(--text-muted);"><em>No textual diff in this commit (e.g. empty commit or binary file changes).</em></div>';
+      return;
+    }
+
+    try {
+      if (typeof Diff2Html !== 'undefined' && Diff2Html.html) {
+        const diffHtml = Diff2Html.html(diffText, {
+          drawFileList: true,
+          matching: 'lines',
+          outputFormat: this.state.diffFormat,
+          renderNothingWhenEmpty: false,
+          colorScheme: 'dark'
+        });
+        content.innerHTML = `<div class="d2h-dark-color-scheme">${diffHtml}</div>`;
+      } else {
+        // Fallback to preformatted diff
+        content.innerHTML = `<pre style="color: #eee; font-family: var(--font-mono); font-size: 0.85rem; white-space: pre-wrap;">${this.escapeHtml(diffText)}</pre>`;
+      }
+    } catch (err) {
+      console.error('Diff render error:', err);
+      content.innerHTML = `<pre style="color: #eee; font-family: var(--font-mono); font-size: 0.85rem; white-space: pre-wrap;">${this.escapeHtml(diffText)}</pre>`;
+    }
+  },
+
+  toggleDiffFormat(format) {
+    this.state.diffFormat = format;
+    const btnSide = document.getElementById('diff-toggle-side');
+    const btnLine = document.getElementById('diff-toggle-line');
+    if (btnSide && btnLine) {
+      btnSide.classList.toggle('active', format === 'side-by-side');
+      btnLine.classList.toggle('active', format === 'line-by-line');
+    }
+    this.renderDiff();
+  },
+
+  closeDiffModal() {
+    const modal = document.getElementById('diff-modal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+    this.state.currentDiffHash = null;
+    this.state.currentDiffRaw = '';
+  },
+
+  escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   },
 
   async checkGitStatus() {

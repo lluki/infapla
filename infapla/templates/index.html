@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>InFaPla - Intelligent Family Planner</title>
   <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/diff2html.min.css">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
 </head>
 <body>
@@ -12,7 +13,6 @@
   <!-- Top App Navigation -->
   <header class="app-header">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-      <button class="mobile-menu-btn" id="mobile-toggle" aria-label="Toggle Navigation">☰</button>
       <div class="logo-group" onclick="App.showOverview()">
         <div class="logo-badge">FP</div>
         <div>
@@ -48,31 +48,6 @@
 
   <!-- Main Layout -->
   <div class="app-container">
-    
-    <!-- Sidebar / File Explorer & History -->
-    <aside class="app-sidebar" id="app-sidebar">
-      <div>
-        <div class="sidebar-section-title">
-          <span>Family Workspace</span>
-          <button class="action-pill-btn" onclick="App.promptNewFile()" title="Create new markdown file">+ New</button>
-        </div>
-        <ul class="file-tree-list" id="file-tree-list">
-          <!-- Populated via JavaScript -->
-          <li class="file-tree-item">Loading files...</li>
-        </ul>
-      </div>
-
-      <div style="margin-top: 1rem;">
-        <div class="sidebar-section-title">
-          <span>Git History</span>
-          <button class="action-pill-btn" onclick="App.loadGitHistory()">↻</button>
-        </div>
-        <ul class="file-tree-list" id="git-history-list" style="font-size: 0.8rem;">
-          <!-- Populated via JavaScript -->
-        </ul>
-      </div>
-    </aside>
-
     <!-- Main Content Viewport -->
     <main class="app-main">
 
@@ -166,8 +141,32 @@
             <div class="card-footer">
               <button class="primary-btn" onclick="App.openFile('shopping/mealplan/2026-10-12.md')">View Meal Plan →</button>
             </div>
-          </div>
+        </div>
+        <!-- End .dashboard-grid -->
 
+        <!-- 1) Recent changes Card (Full Width) -->
+        <div class="dash-card full-width-card" id="card-recent-changes">
+          <div class="card-header">
+            <span class="card-title"><span>🕒</span> Recent changes</span>
+            <button class="action-pill-btn" onclick="App.loadRecentChanges()" title="Refresh recent Git commits">↻ Refresh</button>
+          </div>
+          <div class="card-content-full" id="recent-changes-content">
+            <div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">Loading recent changes...</div>
+          </div>
+        </div>
+
+        <!-- 2) Folders Card (Full Width) -->
+        <div class="dash-card full-width-card" id="card-folders">
+          <div class="card-header">
+            <span class="card-title"><span>📁</span> Folders & Files</span>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button class="action-pill-btn" onclick="App.promptNewFile()" title="Create new markdown file">+ New File</button>
+              <button class="action-pill-btn" onclick="App.loadFiles()" title="Refresh folder tree">↻ Refresh</button>
+            </div>
+          </div>
+          <div class="card-content-full" id="overview-folders-content">
+            <div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">Loading folders...</div>
+          </div>
         </div>
 
       </section>
@@ -342,10 +341,36 @@
     </div>
   </div>
 
+  <!-- Modal: Git Diff Viewer -->
+  <div id="diff-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 110; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="diff-modal-dialog">
+      <div class="diff-modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem; overflow: hidden;">
+          <span style="font-size: 1.25rem;">📄</span>
+          <div>
+            <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary);" id="diff-modal-title">Commit Diff</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);" id="diff-modal-subtitle">commit hash</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div class="diff-format-toggle">
+            <button class="diff-toggle-btn active" id="diff-toggle-side" onclick="App.toggleDiffFormat('side-by-side')">Side-by-Side</button>
+            <button class="diff-toggle-btn" id="diff-toggle-line" onclick="App.toggleDiffFormat('line-by-line')">Line-by-Line</button>
+          </div>
+          <button class="action-pill-btn" onclick="App.closeDiffModal()" style="font-size: 1.1rem; line-height: 1; padding: 0.35rem 0.6rem;">✕</button>
+        </div>
+      </div>
+      <div class="diff-modal-body" id="diff-modal-content">
+        <div style="padding: 2rem; text-align: center; color: var(--text-muted);">Loading diff...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container"></div>
 
-  <!-- Client Application Script -->
+  <!-- Diff2Html & Application Scripts -->
+  <script src="/static/js/diff2html.min.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

@@ -181,6 +181,14 @@ class GitManager:
             res = self._run_git(args, check=False)
             return res.stdout
 
+    def get_commit_diff(self, commit_hash: str, file_path: Optional[str] = None) -> str:
+        with self.lock:
+            args = ["show", "--format=", "-p", commit_hash]
+            if file_path:
+                args += ["--", file_path]
+            res = self._run_git(args, check=False)
+            return res.stdout
+
 class PeriodicCommitter:
     def __init__(self, git_mgr: GitManager, interval_seconds: int = 30):
         self.git_mgr = git_mgr

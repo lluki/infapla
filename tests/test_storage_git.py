@@ -82,5 +82,9 @@ class TestStorageAndGit(unittest.TestCase):
         paths = [f["path"] for f in last_edited]
         self.assertIn("notes/test.md", paths)
 
+        diff = self.git_mgr.get_commit_diff(commit_hash)
+        self.assertIn("+", diff)
+        self.assertIn("# Test Note", diff)
+
 if __name__ == "__main__":
     unittest.main()
