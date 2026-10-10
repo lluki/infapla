@@ -212,12 +212,20 @@ const App = {
           <span class="folder-chevron">${isExpanded ? '▾' : '▸'}</span>
           <span>${fIcon}</span>
           <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600;">${folder.name}/</span>
+          <button class="folder-open-detail-btn" title="Open this folder in detail view">Open Folder →</button>
           <span class="folder-count-badge">${folderTotal} ${folderTotal === 1 ? 'file' : 'files'}</span>
         `;
         folderEl.onclick = (e) => {
           e.stopPropagation();
           this.toggleFolder(folder.path);
         };
+        const openBtn = folderEl.querySelector('.folder-open-detail-btn');
+        if (openBtn) {
+          openBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.openFolder(folder.path);
+          };
+        }
         container.appendChild(folderEl);
 
         // If folder is expanded, render its children
@@ -1469,67 +1477,62 @@ const App = {
 
     grid.innerHTML = '';
 
-    // Render Parent Folder button if not root
+    // Render Parent Folder row if not root
     if (parts.length > 1) {
       const parentPath = parts.slice(0, -1).join('/');
-      const parentCard = document.createElement('div');
-      parentCard.className = 'folder-card';
-      parentCard.innerHTML = `
-        <span class="folder-card-icon">⬆️</span>
-        <div class="folder-card-info">
-          <span class="folder-card-title">.. (Parent Folder)</span>
-          <span class="folder-card-sub">Go up to ${parentPath}</span>
-        </div>
+      const parentRow = document.createElement('div');
+      parentRow.className = 'folder-list-row parent-row';
+      parentRow.innerHTML = `
+        <span class="folder-list-name">..</span>
+        <span class="folder-list-meta">Up to ${parentPath}/</span>
       `;
-      parentCard.onclick = () => this.openFolder(parentPath);
-      grid.appendChild(parentCard);
+      parentRow.onclick = () => this.openFolder(parentPath);
+      grid.appendChild(parentRow);
     }
 
-    // Render Subfolders
-    Array.from(subfolderMap.values()).sort((a, b) => a.name.localeCompare(b.name)).forEach(sub => {
-      const card = document.createElement('div');
-      card.className = 'folder-card';
-      const icon = sub.path.includes('recipes') ? '🍲' : (sub.path.includes('mealplan') ? '📋' : '📁');
-      card.innerHTML = `
-        <span class="folder-card-icon">${icon}</span>
-        <div class="folder-card-info">
-          <span class="folder-card-title">${sub.name}/</span>
-          <span class="folder-card-sub">${sub.count} ${sub.count === 1 ? 'file' : 'files'}</span>
-        </div>
-      `;
-      card.onclick = () => this.openFolder(sub.path);
-      grid.appendChild(card);
-    });
+    const subfolders = Array.from(subfolderMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const sortedDirectFiles = directFiles.sort((a, b) => a.name.localeCompare(b.name));
 
-    // Render Direct Files
-    const fileIconMap = {
-      shopping: '🛒',
-      recipe: '🍲',
-      mealplan: '📋',
-      todo: '✅',
-      calendar: '📅',
-      markdown: '📝',
-      generic: '📄'
-    };
+    // 1. Folders Section
+    if (subfolders.length > 0) {
+      const folderHeader = document.createElement('div');
+      folderHeader.className = 'folder-list-section-title';
+      folderHeader.textContent = 'Folders';
+      grid.appendChild(folderHeader);
 
-    directFiles.sort((a, b) => a.name.localeCompare(b.name)).forEach(file => {
-      const card = document.createElement('div');
-      card.className = 'folder-card';
-      const icon = fileIconMap[file.type] || '📄';
-      const displayName = file.name.replace(/\.md$/, '');
-      card.innerHTML = `
-        <span class="folder-card-icon">${icon}</span>
-        <div class="folder-card-info">
-          <span class="folder-card-title">${displayName}</span>
-          <span class="folder-card-sub">${file.path}</span>
-        </div>
-      `;
-      card.onclick = () => this.openFile(file.path);
-      grid.appendChild(card);
-    });
+      subfolders.forEach(sub => {
+        const row = document.createElement('div');
+        row.className = 'folder-list-row is-folder';
+        row.innerHTML = `
+          <span class="folder-list-name">${sub.name}/</span>
+          <span class="folder-list-meta">${sub.count} ${sub.count === 1 ? 'file' : 'files'}</span>
+        `;
+        row.onclick = () => this.openFolder(sub.path);
+        grid.appendChild(row);
+      });
+    }
 
-    if (subfolderMap.size === 0 && directFiles.length === 0) {
-      grid.innerHTML = '<div style="color: var(--text-muted); padding: 1.5rem; grid-column: 1 / -1;"><em>This folder is empty.</em></div>';
+    // 2. Files Section
+    if (sortedDirectFiles.length > 0) {
+      const fileHeader = document.createElement('div');
+      fileHeader.className = 'folder-list-section-title';
+      fileHeader.textContent = 'Files';
+      grid.appendChild(fileHeader);
+
+      sortedDirectFiles.forEach(file => {
+        const row = document.createElement('div');
+        row.className = 'folder-list-row';
+        row.innerHTML = `
+          <span class="folder-list-name">${file.name}</span>
+          <span class="folder-list-meta">${file.type || 'file'}</span>
+        `;
+        row.onclick = () => this.openFile(file.path);
+        grid.appendChild(row);
+      });
+    }
+
+    if (subfolders.length === 0 && sortedDirectFiles.length === 0) {
+      grid.innerHTML = '<div style="color: var(--text-muted); padding: 1.5rem; font-style: italic;">This folder is empty.</div>';
     }
   },
 

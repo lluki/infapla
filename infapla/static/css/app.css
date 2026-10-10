@@ -193,7 +193,6 @@ body {
 }
 
 .folder-count-badge {
-  margin-left: auto;
   font-size: 0.75rem;
   background: var(--bg-primary);
   color: var(--text-muted);
@@ -201,6 +200,26 @@ body {
   border-radius: 9999px;
   font-weight: 500;
 }
+
+.folder-open-detail-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-left: auto;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.folder-open-detail-btn:hover {
+  background: var(--accent);
+  color: #0f172a;
+  border-color: var(--accent);
+}
+
 
 .folder-children {
   display: flex;
@@ -819,51 +838,70 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
-/* Folder View Card Grid */
-.folder-card {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 1rem 1.15rem;
+/* Folder View Generic Vertical List */
+.folder-view-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.folder-list-section-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  padding-left: 0.25rem;
+}
+
+.folder-list-row {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.85rem;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
 }
 
-.folder-card:hover {
+.folder-list-row:hover {
   border-color: var(--accent);
   background-color: rgba(56, 189, 248, 0.08);
-  transform: translateY(-1px);
 }
 
-.folder-card-icon {
-  font-size: 1.6rem;
+.folder-list-row.parent-row {
+  background-color: transparent;
+  border-style: dashed;
+}
+
+.folder-list-name {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-list-row.is-folder .folder-list-name {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.folder-list-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
-.folder-card-info {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  gap: 0.15rem;
-}
-
-.folder-card-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.folder-card-sub {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
 
 /* Specialized Shopping List UI */
 .shopping-list-ui {
