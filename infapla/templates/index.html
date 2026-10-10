@@ -136,18 +136,7 @@
         </div>
         <!-- End .dashboard-grid -->
 
-        <!-- 1) Recent changes Card (Full Width) -->
-        <div class="dash-card full-width-card" id="card-recent-changes">
-          <div class="card-header">
-            <span class="card-title"><span>🕒</span> Recent changes</span>
-            <button class="action-pill-btn" onclick="App.loadRecentChanges()" title="Refresh recent Git commits">↻ Refresh</button>
-          </div>
-          <div class="card-content-full" id="recent-changes-content">
-            <div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">Loading recent changes...</div>
-          </div>
-        </div>
-
-        <!-- 2) Folders Card (Full Width) -->
+        <!-- 1) Folders Card (Full Width) -->
         <div class="dash-card full-width-card" id="card-folders">
           <div class="card-header">
             <span class="card-title"><span>📁</span> Folders & Files</span>
@@ -158,6 +147,17 @@
           </div>
           <div class="card-content-full" id="overview-folders-content">
             <div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">Loading folders...</div>
+          </div>
+        </div>
+
+        <!-- 2) Recent changes Card (Full Width) -->
+        <div class="dash-card full-width-card" id="card-recent-changes">
+          <div class="card-header">
+            <span class="card-title"><span>🕒</span> Recent changes</span>
+            <button class="action-pill-btn" onclick="App.loadRecentChanges()" title="Refresh recent Git commits">↻ Refresh</button>
+          </div>
+          <div class="card-content-full" id="recent-changes-content">
+            <div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">Loading recent changes...</div>
           </div>
         </div>
 

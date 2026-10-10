@@ -1121,18 +1121,99 @@ const App = {
       // Ingredients (clickable to add to shopping list!)
       const ingDiv = document.getElementById('recipe-ingredients');
       ingDiv.innerHTML = '';
-      (data.ingredients || []).forEach(ing => {
-        const item = document.createElement('div');
-        item.className = 'ingredient-clickable';
-        item.innerHTML = `
-          <span>• ${ing.text}</span>
-          <span class="add-hint">+ Add to Shopping List</span>
-        `;
-        item.onclick = async () => {
-          await this.addIngredientToShopping(ing.clean_name || ing.text);
-        };
-        ingDiv.appendChild(item);
-      });
+
+      const hasCategories = Array.isArray(data.ingredient_categories) &&
+        data.ingredient_categories.length > 0 &&
+        data.ingredient_categories.some(cat => cat.name);
+
+      if (hasCategories) {
+        data.ingredient_categories.forEach(cat => {
+          if (!cat.items || cat.items.length === 0) return;
+
+          const groupDiv = document.createElement('div');
+          groupDiv.className = 'recipe-category-group';
+          groupDiv.style.marginBottom = '1rem';
+
+          if (cat.name) {
+            const headerDiv = document.createElement('div');
+            headerDiv.style.display = 'flex';
+            headerDiv.style.justifyContent = 'space-between';
+            headerDiv.style.alignItems = 'center';
+            headerDiv.style.margin = '0.75rem 0 0.4rem 0';
+            headerDiv.style.paddingBottom = '0.25rem';
+            headerDiv.style.borderBottom = '1px solid var(--border-color)';
+
+            const titleSpan = document.createElement('span');
+            titleSpan.style.fontSize = '0.85rem';
+            titleSpan.style.fontWeight = '700';
+            titleSpan.style.color = 'var(--accent)';
+            titleSpan.style.textTransform = 'uppercase';
+            titleSpan.style.letterSpacing = '0.05em';
+            titleSpan.textContent = `🏷️ ${cat.name}`;
+            headerDiv.appendChild(titleSpan);
+
+            const addCatBtn = document.createElement('button');
+            addCatBtn.className = 'action-pill-btn';
+            addCatBtn.style.fontSize = '0.75rem';
+            addCatBtn.style.padding = '0.2rem 0.55rem';
+            addCatBtn.textContent = '+ Add Section';
+            addCatBtn.onclick = async (e) => {
+              e.stopPropagation();
+              let count = 0;
+              for (const ing of cat.items) {
+                const itemText = ing.text || ing.clean_name;
+                if (itemText) {
+                  await fetch('/api/shopping/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: itemText })
+                  });
+                  count++;
+                }
+              }
+              this.showToast(`Added ${count} items from ${cat.name} to shopping list!`, 'success');
+              this.loadDashboardData();
+            };
+            headerDiv.appendChild(addCatBtn);
+            groupDiv.appendChild(headerDiv);
+          }
+
+          const itemsList = document.createElement('div');
+          itemsList.className = 'ingredients-list';
+          itemsList.style.gap = '0.4rem';
+
+          cat.items.forEach(ing => {
+            const item = document.createElement('div');
+            item.className = 'ingredient-clickable';
+            item.dataset.ingredientText = ing.text;
+            item.innerHTML = `
+              <span class="ingredient-name">• ${this.escapeHtml(ing.text)}</span>
+              <span class="add-hint">+ Add to Shopping List</span>
+            `;
+            item.onclick = async () => {
+              await this.addIngredientToShopping(ing.text);
+            };
+            itemsList.appendChild(item);
+          });
+
+          groupDiv.appendChild(itemsList);
+          ingDiv.appendChild(groupDiv);
+        });
+      } else {
+        (data.ingredients || []).forEach(ing => {
+          const item = document.createElement('div');
+          item.className = 'ingredient-clickable';
+          item.dataset.ingredientText = ing.text;
+          item.innerHTML = `
+            <span class="ingredient-name">• ${this.escapeHtml(ing.text)}</span>
+            <span class="add-hint">+ Add to Shopping List</span>
+          `;
+          item.onclick = async () => {
+            await this.addIngredientToShopping(ing.text);
+          };
+          ingDiv.appendChild(item);
+        });
+      }
 
       // Instructions
       const instDiv = document.getElementById('recipe-instructions');
@@ -1167,10 +1248,10 @@ const App = {
   },
 
   async addAllIngredientsToShopping() {
-    const ingredients = document.querySelectorAll('#recipe-ingredients .ingredient-clickable span:first-child');
+    const ingredientEls = document.querySelectorAll('#recipe-ingredients .ingredient-clickable');
     let count = 0;
-    for (const el of ingredients) {
-      const text = el.textContent.replace(/^•\s*/, '').trim();
+    for (const el of ingredientEls) {
+      const text = el.dataset.ingredientText || el.querySelector('.ingredient-name, span:first-child')?.textContent.replace(/^•\s*/, '').trim();
       if (text) {
         await fetch('/api/shopping/add', {
           method: 'POST',

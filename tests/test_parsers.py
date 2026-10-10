@@ -146,6 +146,37 @@ Instructions:
         self.assertEqual(data["ingredients"][0]["text"], "2 ripe Bananas")
         self.assertEqual(len(data["instructions"]), 2)
 
+    def test_parse_categorized_recipe(self):
+        cat_recipe = """# Palak Paneer
+
+## Ingredients
+
+### Spices & Seasonings
+- 1/2 tsp cumin seeds
+- 1/4 tsp turmeric powder
+- Salt to taste
+
+### Other Ingredients
+- 1/3 cup onion (finely chopped, ~1 small onion)
+- 200–250 g paneer (or tofu, cubed)
+
+## Instructions
+1. Sauté aromatics.
+2. Add paneer and serve.
+"""
+        data = parse_recipe(cat_recipe)
+        self.assertEqual(data["title"], "Palak Paneer")
+        self.assertEqual(len(data["ingredients"]), 5)
+        self.assertEqual(data["ingredients"][3]["text"], "1/3 cup onion (finely chopped, ~1 small onion)")
+        self.assertEqual(data["ingredients"][3]["category"], "Other Ingredients")
+        self.assertEqual(data["ingredients"][0]["category"], "Spices & Seasonings")
+
+        self.assertEqual(len(data["ingredient_categories"]), 2)
+        self.assertEqual(data["ingredient_categories"][0]["name"], "Spices & Seasonings")
+        self.assertEqual(len(data["ingredient_categories"][0]["items"]), 3)
+        self.assertEqual(data["ingredient_categories"][1]["name"], "Other Ingredients")
+        self.assertEqual(len(data["ingredient_categories"][1]["items"]), 2)
+
 class TestTodoParser(unittest.TestCase):
     def setUp(self):
         self.sample_todo = """# Family TODO List
