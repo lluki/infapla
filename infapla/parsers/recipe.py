@@ -44,6 +44,23 @@ def parse_recipe(content: str) -> Dict[str, Any]:
         if not stripped:
             continue
 
+        # Tolerant detection for plain headers without leading '#'
+        plain_sec = stripped.rstrip(":").strip().lower()
+        if plain_sec in ("ingredient", "ingredients"):
+            current_section = "ingredients"
+            continue
+        elif any(plain_sec.startswith(k) for k in ("instruction", "direction", "method", "step", "preparation")):
+            current_section = "instructions"
+            continue
+        elif plain_sec in ("info", "meta", "metadata", "details"):
+            current_section = "metadata"
+            continue
+
+        if current_section == "intro":
+            if title == "Recipe":
+                title = stripped
+                continue
+
         if current_section == "metadata":
             if ":" in stripped:
                 k, v = stripped.split(":", 1)
@@ -51,14 +68,12 @@ def parse_recipe(content: str) -> Dict[str, Any]:
                 metadata[k_clean] = v.strip()
         elif current_section == "ingredients":
             l_match = LIST_ITEM_PATTERN.match(line)
-            if l_match:
-                raw_ing = l_match.group(2).strip()
-                # Clean clean name
-                clean_name = re.sub(r"^\d+[\s\w./-]*\s+(of\s+)?", "", raw_ing).strip()
-                ingredients.append({
-                    "text": raw_ing,
-                    "clean_name": clean_name or raw_ing
-                })
+            raw_ing = l_match.group(2).strip() if l_match else stripped
+            clean_name = re.sub(r"^\d+[\s\w./-]*\s+(of\s+)?", "", raw_ing).strip()
+            ingredients.append({
+                "text": raw_ing,
+                "clean_name": clean_name or raw_ing
+            })
         elif current_section == "instructions":
             n_match = NUMBERED_ITEM_PATTERN.match(line)
             l_match = LIST_ITEM_PATTERN.match(line)

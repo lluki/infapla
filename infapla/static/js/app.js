@@ -52,15 +52,16 @@ const App = {
       });
     }
 
-    // Visual (WYSIWYG) input listener
-    const wysiwygContent = document.getElementById('wysiwyg-content');
-    if (wysiwygContent) {
-      wysiwygContent.addEventListener('input', () => {
-        // Simple text synchronization
-        this.state.currentFileContent = wysiwygContent.innerText;
-        if (rawEditor) rawEditor.value = this.state.currentFileContent;
-      });
-    }
+    // Ctrl+S / Cmd+S shortcut to save file
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        const editorView = document.getElementById('view-editor');
+        if (editorView && editorView.style.display !== 'none') {
+          e.preventDefault();
+          this.saveCurrentFile();
+        }
+      }
+    });
   },
 
   handleRouteFromUrl(push = false) {
@@ -731,6 +732,12 @@ const App = {
   },
 
   switchEditorTab(tabName) {
+    // Sync current raw editor content to state if switching away from raw
+    const rawTextarea = document.getElementById('raw-editor-text');
+    if (this.state.currentTab === 'raw' && rawTextarea) {
+      this.state.currentFileContent = rawTextarea.value;
+    }
+
     this.state.currentTab = tabName;
 
     const tabSpecial = document.getElementById('tab-special');
@@ -747,10 +754,13 @@ const App = {
     if (tabName === 'special') {
       if (tabSpecial) tabSpecial.classList.add('active');
       if (paneSpecial) paneSpecial.style.display = 'block';
+      // Re-render special view with current content so changes in raw immediately reflect in interactive mode
+      if (this.state.currentFileType && this.state.currentFilePath) {
+        this.renderSpecialView(this.state.currentFileType, this.state.currentFilePath, this.state.currentFileContent);
+      }
     } else if (tabName === 'raw') {
       if (tabRaw) tabRaw.classList.add('active');
       if (paneRaw) paneRaw.style.display = 'flex';
-      const rawTextarea = document.getElementById('raw-editor-text');
       if (rawTextarea) rawTextarea.value = this.state.currentFileContent;
     } else {
       if (tabWysiwyg) tabWysiwyg.classList.add('active');
@@ -789,6 +799,9 @@ const App = {
     // Bullets
     html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
     html = html.replace(/(<li>.*<\/li>)/gims, '<ul>$1</ul>');
+
+    // Numbered lists
+    html = html.replace(/^\d+\.\s+(.*$)/gim, '<div style="margin: 0.25rem 0; padding-left: 0.25rem;"><span style="color: var(--accent); font-weight: 600;">$&</span></div>');
 
     // Links
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="javascript:App.handleLinkClick(\'$2\')">$1</a>');
@@ -1339,11 +1352,10 @@ const App = {
 
   async saveCurrentFile() {
     if (!this.state.currentFilePath) return;
-    const content = (this.state.currentTab === 'raw')
-      ? document.getElementById('raw-editor-text').value
-      : (this.state.currentTab === 'wysiwyg'
-          ? this.state.currentFileContent
-          : this.state.currentFileContent);
+    const rawTextarea = document.getElementById('raw-editor-text');
+    const content = (this.state.currentTab === 'raw' && rawTextarea)
+      ? rawTextarea.value
+      : this.state.currentFileContent;
 
     try {
       const res = await fetch('/api/file', {
@@ -1357,6 +1369,8 @@ const App = {
       const data = await res.json();
       if (data.success) {
         this.state.currentFileContent = content;
+        if (rawTextarea) rawTextarea.value = content;
+        this.renderWYSIWYG(content);
         this.showToast('File saved successfully', 'success');
         this.checkGitStatus();
         this.loadDashboardData();

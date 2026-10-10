@@ -122,6 +122,30 @@ class TestRecipeParser(unittest.TestCase):
         self.assertIn("- 2 Eggs", formatted)
         self.assertIn("1. Mix ingredients", formatted)
 
+    def test_parse_recipe_tolerant(self):
+        # Plain text without markdown symbols
+        plain_recipe = """Fluffy Banana Pancakes
+
+Info:
+Servings: 4
+Prep time: 10 mins
+
+Ingredients:
+2 ripe Bananas
+2 Eggs
+1 cup Flour
+
+Instructions:
+1. Mash bananas
+2. Whisk eggs
+"""
+        data = parse_recipe(plain_recipe)
+        self.assertEqual(data["title"], "Fluffy Banana Pancakes")
+        self.assertEqual(data["metadata"]["Servings"], "4")
+        self.assertEqual(len(data["ingredients"]), 3)
+        self.assertEqual(data["ingredients"][0]["text"], "2 ripe Bananas")
+        self.assertEqual(len(data["instructions"]), 2)
+
 class TestTodoParser(unittest.TestCase):
     def setUp(self):
         self.sample_todo = """# Family TODO List
