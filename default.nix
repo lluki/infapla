@@ -1,5 +1,7 @@
 { lib
 , python3Packages
+, bash
+, coreutils
 , bubblewrap
 , git
 , makeWrapper
@@ -19,6 +21,11 @@ python3Packages.buildPythonApplication {
     makeWrapper
   ];
 
+  buildInputs = [
+    bash
+    coreutils
+  ];
+
   propagatedBuildInputs = [
     python3Packages.flask
   ];
@@ -35,8 +42,9 @@ python3Packages.buildPythonApplication {
   '';
 
   postFixup = ''
+    patchShebangs $out
     wrapProgram $out/bin/infapla \
-      --prefix PATH : ${lib.makeBinPath [ bubblewrap git agy ]} \
+      --prefix PATH : ${lib.makeBinPath [ bash coreutils bubblewrap git agy ]} \
       --set-default INFAPLA_SANDBOX_SCRIPT "$out/share/infapla/run-agy-sandboxed.sh" \
       --set-default AGY_BIN "${agy}/bin/agy"
   '';
