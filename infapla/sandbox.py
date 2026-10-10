@@ -35,13 +35,24 @@ class SandboxRunner:
         self.data_dir = Path(data_dir).resolve()
         self.model = model or os.environ.get("AGY_MODEL", "gemini-3.8-flash-low")
         self.effort = effort or os.environ.get("AGY_EFFORT", "low")
-        if script_path and Path(script_path).exists():
-            self.script_path = Path(script_path).resolve()
-        elif "INFAPLA_SANDBOX_SCRIPT" in os.environ and Path(os.environ["INFAPLA_SANDBOX_SCRIPT"]).exists():
-            self.script_path = Path(os.environ["INFAPLA_SANDBOX_SCRIPT"]).resolve()
-        elif (Path(__file__).resolve().parent.parent.parent.parent / "share" / "infapla" / "run-agy-sandboxed.sh").exists():
-            self.script_path = (Path(__file__).resolve().parent.parent.parent.parent / "share" / "infapla" / "run-agy-sandboxed.sh").resolve()
-        else:
+        candidate_paths = [
+            script_path,
+            os.environ.get("INFAPLA_SANDBOX_SCRIPT"),
+            shutil.which("run-agy-sandboxed.sh"),
+            Path(__file__).resolve().parent / "run-agy-sandboxed.sh",
+            Path(__file__).resolve().parent.parent / "run-agy-sandboxed.sh",
+        ]
+        for p in Path(__file__).resolve().parents:
+            candidate_paths.append(p / "share" / "infapla" / "run-agy-sandboxed.sh")
+            candidate_paths.append(p / "bin" / "run-agy-sandboxed.sh")
+
+        self.script_path = None
+        for cand in candidate_paths:
+            if cand and Path(cand).exists():
+                self.script_path = Path(cand).resolve()
+                break
+
+        if not self.script_path:
             self.script_path = (Path(__file__).resolve().parent.parent / "run-agy-sandboxed.sh").resolve()
 
     def _get_files_snapshot(self) -> Dict[str, Any]:

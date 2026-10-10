@@ -24,9 +24,14 @@ python3Packages.buildPythonApplication {
   ];
 
   postInstall = ''
-    mkdir -p $out/share/infapla
+    mkdir -p $out/share/infapla $out/bin
     cp run-agy-sandboxed.sh $out/share/infapla/run-agy-sandboxed.sh
-    chmod +x $out/share/infapla/run-agy-sandboxed.sh
+    cp run-agy-sandboxed.sh $out/bin/run-agy-sandboxed.sh
+    chmod +x $out/share/infapla/run-agy-sandboxed.sh $out/bin/run-agy-sandboxed.sh
+    for sp in $out/lib/python*/site-packages/infapla; do
+      cp run-agy-sandboxed.sh $sp/run-agy-sandboxed.sh
+      chmod +x $sp/run-agy-sandboxed.sh
+    done
   '';
 
   postFixup = ''
