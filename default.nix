@@ -3,6 +3,8 @@
 , bubblewrap
 , git
 , makeWrapper
+, callPackage
+, agy ? callPackage ./agy.nix { }
 }:
 
 python3Packages.buildPythonApplication {
@@ -29,9 +31,14 @@ python3Packages.buildPythonApplication {
 
   postFixup = ''
     wrapProgram $out/bin/infapla \
-      --prefix PATH : ${lib.makeBinPath [ bubblewrap git ]} \
-      --set-default INFAPLA_SANDBOX_SCRIPT "$out/share/infapla/run-agy-sandboxed.sh"
+      --prefix PATH : ${lib.makeBinPath [ bubblewrap git agy ]} \
+      --set-default INFAPLA_SANDBOX_SCRIPT "$out/share/infapla/run-agy-sandboxed.sh" \
+      --set-default AGY_BIN "${agy}/bin/agy"
   '';
+
+  passthru = {
+    inherit agy;
+  };
 
   meta = with lib; {
     description = "InFaPla - Intelligent Family Planner";

@@ -46,7 +46,7 @@ in {
 
     agyBin = mkOption {
       type = types.str;
-      default = "/home/lukas/.local/bin/agy";
+      default = "${cfg.package.agy}/bin/agy";
       description = "Path to agy binary.";
     };
 
