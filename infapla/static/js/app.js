@@ -7,6 +7,7 @@ const App = {
     currentFileContent: '',
     currentTab: 'wysiwyg',
     files: [],
+    dataDir: null,
     gitDirty: false,
     expandedFolders: new Set(),
     currentDiffHash: null,
@@ -106,6 +107,9 @@ const App = {
     try {
       const res = await fetch('/api/info');
       const data = await res.json();
+      if (data.data_dir) {
+        this.state.dataDir = data.data_dir;
+      }
       const badge = document.getElementById('ai-model-badge');
       if (badge && data.model) {
         const shortModel = data.model.replace('gemini-', '').replace('-low', ' (Fast)');
@@ -803,8 +807,18 @@ const App = {
     // Numbered lists
     html = html.replace(/^\d+\.\s+(.*$)/gim, '<div style="margin: 0.25rem 0; padding-left: 0.25rem;"><span style="color: var(--accent); font-weight: 600;">$&</span></div>');
 
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="javascript:App.handleLinkClick(\'$2\')">$1</a>');
+    // Links: [label](url) -> resolve file URLs into clean relative paths
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/gim, (match, label, href) => {
+      const cleanHref = href.trim();
+      if (cleanHref.startsWith('http://') || cleanHref.startsWith('https://')) {
+        return `<a href="${cleanHref}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      }
+      const relPath = this.normalizeFilePath(cleanHref);
+      return `<a href="javascript:App.handleLinkClick('${relPath}')">${label}</a>`;
+    });
+
+    // Inline code: `code`
+    html = html.replace(/`([^`]+)`/gim, '<code>$1</code>');
 
     // Paragraph breaks
     html = html.replace(/\n\n/gim, '<p></p>');
@@ -812,14 +826,70 @@ const App = {
     return html;
   },
 
+  normalizeFilePath(rawPath) {
+    if (!rawPath) return '';
+    let p = String(rawPath).trim();
+
+    // Strip line fragments like #L1-L10 or #section
+    p = p.split('#')[0];
+
+    // Strip query parameters
+    p = p.split('?')[0];
+
+    // Strip file:// scheme (case-insensitive)
+    p = p.replace(/^file:\/{2,3}/i, '');
+
+    // Decode URI components
+    try {
+      p = decodeURIComponent(p);
+    } catch (e) {}
+
+    // Match active dataDir from server if available
+    if (this.state.dataDir && p.startsWith(this.state.dataDir)) {
+      p = p.substring(this.state.dataDir.length);
+    }
+
+    // Match /data/ directory boundary
+    const dataIdx = p.indexOf('/data/');
+    if (dataIdx !== -1) {
+      p = p.substring(dataIdx + 6);
+    } else if (p.startsWith('data/')) {
+      p = p.substring(5);
+    } else if (p.startsWith('/data/')) {
+      p = p.substring(6);
+    } else {
+      const repoIdx = p.indexOf('/InFaPla/');
+      if (repoIdx !== -1) {
+        p = p.substring(repoIdx + 9);
+      }
+    }
+
+    // Strip relative dots and leading slashes
+    p = p.replace(/^\.?\/?\.\.\//, '').replace(/^\.\//, '').replace(/^\/+/, '');
+
+    // Second pass in case data/ was still left
+    if (p.startsWith('data/')) {
+      p = p.substring(5);
+    }
+
+    return p;
+  },
+
   handleLinkClick(href) {
+    if (!href) return;
     if (href.startsWith('http://') || href.startsWith('https://')) {
       window.open(href, '_blank');
       return;
     }
-    // Relative link
-    const cleanPath = href.replace(/^\.\.\//, 'shopping/').replace(/^\.\//, '');
-    this.openFile(cleanPath);
+    const cleanPath = this.normalizeFilePath(href);
+    if (!cleanPath) return;
+
+    // If it's a directory (or ends with slash), open folder view
+    if (cleanPath.endsWith('/') || (!cleanPath.includes('.') && !cleanPath.includes('/'))) {
+      this.openFolder(cleanPath.replace(/\/+$/, ''));
+    } else {
+      this.openFile(cleanPath);
+    }
   },
 
   async renderSpecialView(type, path, content) {
