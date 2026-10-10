@@ -3,7 +3,7 @@
 **Date**: October 10, 2026  
 **Repository**: `InFaPla` (Intelligent Family Planner)  
 **Branch**: `main`  
-**Test Suite**: 33/33 Passing (`python3 -m unittest discover tests`)
+**Test Suite**: 34/34 Passing (`python3 -m unittest discover tests`)
 
 ---
 
@@ -52,8 +52,9 @@ InFaPla/
 - **Unified Overview**: Removed sidebar clutter; the home view features family summary cards (**Shopping**, **Tasks**, **Calendar**, **Recipes**), followed by:
   - **Recent Changes**: Displays recent commits with changed file lists and interactive per-file side-by-side raw Git diff modals.
   - **Uncommitted Changes**: Dynamic banner alerting to uncommitted file changes with a working **Sync** action (`/api/git/sync`).
-  - **Folders Overview**: Clean directory tree with direct links to open any folder in full detail.
+  - **Folders Overview**: Clean directory tree with direct links to open any folder in full detail. Auto-expands directories when new files are created.
 - **URL Routing & State Persistence**: Preserves navigation state on page reloads (`?file=<path>` and `?folder=<path>`).
+- **Live FS Synchronization**: Filesystem and Git status are actively polled every 3 seconds, refreshed on window focus, and refreshed instantly whenever the AI agent creates or modifies files. HTTP cache-control headers prevent stale browser responses.
 
 ### B. Clean Directory Explorer
 - Dedicated vertical folder view listing subdirectories first, followed by files.
@@ -61,11 +62,11 @@ InFaPla/
 - Free of excessive icons or card wrapping for maximum readability.
 
 ### C. Content Window Tab System
-- Mode chooser tabs (`Interactive`, `Visual`, and `Raw`) are anchored directly to the content card header rather than floating in top toolbars.
-- **Interactive**: Active by default on special file types (shopping, tasks, recipes, mealplan, calendar). Auto-saves state on interactive actions (e.g. checking off items).
-- **Visual**: Rendered markdown view with an embedded "Save File" button.
-- **Raw**: Plain-text markdown editor with an embedded "Save File" button.
-- Clean labeling: Eliminated dynamic emojis in tab headers for a professional, consistent look. Extraneous tabs are automatically hidden in directory views.
+- Mode chooser tabs (`Interactive`, `Visual`, and `Raw`) are located directly after the AI chatbox and directly above the editor content.
+- **Interactive**: Active by default on special file types (shopping, tasks, recipes, mealplan, calendar). Auto-saves state on interactive actions (e.g. checking off items). Tolerantly parses non-standard markdown formats.
+- **Visual**: Rendered read-only markdown preview.
+- **Raw**: Plain-text markdown editor with strictly idempotent saving (no markdown syntax stripping) and `Ctrl+S` / `Cmd+S` keyboard shortcuts.
+- Clean labeling: Extraneous tabs are automatically hidden in directory views.
 
 ### D. Special Interactive Modes
 - **Shopping List (`shopping/list.md`)**:
