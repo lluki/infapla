@@ -195,6 +195,12 @@ class SandboxRunner:
                 break
 
         process.wait()
+        stderr_err = process.stderr.read() if process.stderr else ""
+        if process.returncode != 0:
+            logger.error(f"agy process exited with code {process.returncode}: {stderr_err}")
+            if not accumulated_text:
+                yield {"type": "error", "error": f"Agent error ({process.returncode}): {stderr_err.strip()}"}
+                return
 
         # If loop finished without emitting "done"
         if not accumulated_text:

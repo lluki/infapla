@@ -80,6 +80,7 @@ in {
       description = "InFaPla - Intelligent Family Planner";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
+      path = [ pkgs.bubblewrap pkgs.git ];
 
       serviceConfig = {
         Restart = "always";
