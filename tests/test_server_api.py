@@ -82,6 +82,16 @@ class TestServerAPI(unittest.TestCase):
         done_items = [i for i in res_clear.get_json()["items"] if i["done"]]
         self.assertEqual(len(done_items), 0)
 
+        # ARCHIVE shopping
+        self.client.post("/api/shopping/add", json={"text": "Bread"})
+        res_arch = self.client.post("/api/shopping/archive")
+        self.assertEqual(res_arch.status_code, 200)
+        arch_data = res_arch.get_json()
+        self.assertIn("archived_to", arch_data)
+        self.assertTrue(arch_data["archived_to"].startswith("shopping/list-archive/"))
+        # Shopping list should now be reset and empty
+        self.assertEqual(len(arch_data["shopping"]["items"]), 0)
+
     def test_todo_api(self):
         # ADD todo
         res_add = self.client.post("/api/todo/add", json={"text": "Mow the lawn"})

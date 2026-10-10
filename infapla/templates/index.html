@@ -234,7 +234,7 @@
               <div class="list-add-box">
                 <input type="text" id="add-shopping-input" class="list-input" placeholder="Add an item to the shopping list (press Enter)..." onkeydown="if(event.key==='Enter') App.addShoppingItem()">
                 <button class="primary-btn" onclick="App.addShoppingItem()">Add</button>
-                <button class="action-pill-btn" onclick="App.clearShoppingChecked()" title="Remove all checked-off items">🧹 Clear Checked Off</button>
+                <button class="action-pill-btn" onclick="App.archiveShoppingList()" title="Archive current shopping list to shopping/list-archive/ and start a fresh list">📦 Archive Shopping List</button>
               </div>
               <div id="special-shopping-items" class="items-group">
                 <!-- Shopping items inserted here -->

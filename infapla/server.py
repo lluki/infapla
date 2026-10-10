@@ -194,6 +194,11 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         updated = storage.clear_shopping_completed()
         return jsonify(updated)
 
+    @app.route("/api/shopping/archive", methods=["POST"])
+    def archive_shopping():
+        updated = storage.archive_shopping_list()
+        return jsonify(updated)
+
     # Specialized: TODO
     @app.route("/api/todo", methods=["GET"])
     def get_todo():

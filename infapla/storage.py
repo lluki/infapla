@@ -266,6 +266,39 @@ class Storage:
         self.write_file("shopping/list.md", new_content)
         return parse_shopping_list(new_content)
 
+    def archive_shopping_list(self) -> Dict[str, Any]:
+        """
+        Moves shopping/list.md to shopping/list-archive/YYYY-MM-DD.md
+        and replaces shopping/list.md with an empty shopping list.
+        """
+        import datetime
+        content = ""
+        try:
+            content = self.read_file("shopping/list.md")
+        except Exception:
+            pass
+
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        archive_dir = self.data_dir / "shopping" / "list-archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+
+        archive_filename = f"{today}.md"
+        counter = 1
+        while (archive_dir / archive_filename).exists():
+            archive_filename = f"{today}-{counter}.md"
+            counter += 1
+
+        rel_archive_path = f"shopping/list-archive/{archive_filename}"
+        self.write_file(rel_archive_path, content if content.strip() else "# Family Shopping List\n")
+
+        empty_list = "# Family Shopping List\n"
+        self.write_file("shopping/list.md", empty_list)
+
+        return {
+            "archived_to": rel_archive_path,
+            "shopping": parse_shopping_list(empty_list)
+        }
+
     def get_recipe_data(self, rel_path: str) -> Dict[str, Any]:
         content = self.read_file(rel_path)
         data = parse_recipe(content)

@@ -1022,7 +1022,6 @@ const App = {
     row.innerHTML = `
       <input type="checkbox" class="item-checkbox" ${item.done ? 'checked' : ''}>
       <span class="item-text">${item.text}</span>
-      <button class="item-delete-btn" title="Remove item">✕</button>
     `;
 
     const chk = row.querySelector('.item-checkbox');
@@ -1032,14 +1031,9 @@ const App = {
     });
 
     row.addEventListener('click', async (e) => {
-      if (e.target !== chk && !e.target.classList.contains('item-delete-btn')) {
+      if (e.target !== chk) {
         await this.toggleShoppingItem(item.id || item.text);
       }
-    });
-
-    row.querySelector('.item-delete-btn').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await this.removeShoppingItem(item.id || item.text);
     });
 
     return row;
@@ -1095,20 +1089,28 @@ const App = {
     }
   },
 
-  async clearShoppingChecked() {
+  async archiveShoppingList() {
+    if (!confirm('Archive current shopping list to shopping/list-archive/ and start a fresh empty list?')) {
+      return;
+    }
     try {
-      const res = await fetch('/api/shopping/clear-completed', {
+      const res = await fetch('/api/shopping/archive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
       const data = await res.json();
       await this.loadSpecialShoppingUI();
       this.syncCurrentFileContent();
-      this.showToast('Cleared completed items!', 'success');
+      this.showToast(`Archived shopping list to ${data.archived_to || 'archive'}!`, 'success');
       this.loadDashboardData();
+      this.loadFilesTree();
     } catch (e) {
-      this.showToast('Failed to clear completed items', 'info');
+      this.showToast('Failed to archive shopping list', 'info');
     }
+  },
+
+  async clearShoppingChecked() {
+    return this.archiveShoppingList();
   },
 
   // ===== Special Recipe UI =====
