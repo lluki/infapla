@@ -19,8 +19,29 @@ const App = {
   init() {
     this.bindEvents();
     this.refreshAll();
-    // Poll git status periodically
-    setInterval(() => this.checkGitStatus(), 15000);
+
+    // Periodically poll filesystem and git status (every 3 seconds)
+    setInterval(() => {
+      this.loadFiles();
+      this.checkGitStatus();
+    }, 3000);
+
+    // Refresh immediately when window or tab gains focus
+    window.addEventListener('focus', () => {
+      this.loadFiles();
+      this.checkGitStatus();
+      this.loadDashboardData();
+      this.loadRecentChanges();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this.loadFiles();
+        this.checkGitStatus();
+        this.loadDashboardData();
+        this.loadRecentChanges();
+      }
+    });
   },
 
   bindEvents() {
@@ -123,10 +144,13 @@ const App = {
 
   async loadFiles() {
     try {
-      const res = await fetch('/api/files');
+      const res = await fetch(`/api/files?_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       this.state.files = data.files || [];
       this.renderFileTree();
+      if (this.state.currentView === 'folder' && this.state.currentFolderPath) {
+        this.renderFolderContents(this.state.currentFolderPath);
+      }
     } catch (e) {
       console.error('Failed to load files:', e);
     }
@@ -1763,7 +1787,16 @@ const App = {
                 }
 
                 if (modFiles.length > 0) {
+                  // Auto-expand folder tree for modified or created files
+                  modFiles.forEach(f => {
+                    const parts = f.split('/');
+                    for (let i = 1; i < parts.length; i++) {
+                      this.state.expandedFolders.add(parts.slice(0, i).join('/'));
+                    }
+                  });
+
                   this.showToast(`AI agent updated: ${modFiles.join(', ')}`, 'success');
+
                   // If current file was modified, reload editor view
                   if (this.state.currentFilePath && modFiles.includes(this.state.currentFilePath)) {
                     await this.syncCurrentFileContent();
@@ -1771,9 +1804,13 @@ const App = {
                       this.renderSpecialView(this.state.currentFileType, this.state.currentFilePath, this.state.currentFileContent);
                     }
                   }
-                  this.loadDashboardData();
-                  this.checkGitStatus();
                 }
+
+                // ALWAYS reload files from filesystem, dashboard cards, recent changes, and git status
+                await this.loadFiles();
+                this.loadDashboardData();
+                this.loadRecentChanges();
+                this.checkGitStatus();
               } else if (eventData.type === 'error') {
                 if (statusDiv) {
                   statusDiv.className = 'message-status';

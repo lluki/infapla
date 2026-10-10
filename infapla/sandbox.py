@@ -40,28 +40,35 @@ class SandboxRunner:
         else:
             self.script_path = (Path(__file__).resolve().parent.parent / "run-agy-sandboxed.sh").resolve()
 
-    def _get_files_snapshot(self) -> Dict[str, float]:
+    def _get_files_snapshot(self) -> Dict[str, Any]:
         """
-        Takes a snapshot of file mtimes in data_dir to detect changes made by agy.
+        Takes a snapshot of file mtimes and sizes in data_dir to detect changes made by agy.
         """
         snapshot = {}
-        for root, _, files in os.walk(self.data_dir):
-            if ".git" in root:
+        for root, dirs, files in os.walk(self.data_dir):
+            if ".git" in dirs:
+                dirs.remove(".git")
+            if "__pycache__" in dirs:
+                dirs.remove("__pycache__")
                 continue
             for f in files:
                 full = Path(root) / f
                 try:
-                    snapshot[full.relative_to(self.data_dir).as_posix()] = full.stat().st_mtime
+                    st = full.stat()
+                    snapshot[full.relative_to(self.data_dir).as_posix()] = (st.st_mtime_ns, st.st_size)
                 except Exception:
                     pass
         return snapshot
 
-    def _detect_modified_files(self, before_snapshot: Dict[str, float]) -> List[str]:
+    def _detect_modified_files(self, before_snapshot: Dict[str, Any]) -> List[str]:
         after_snapshot = self._get_files_snapshot()
-        modified = []
-        for path, mtime in after_snapshot.items():
-            if path not in before_snapshot or before_snapshot[path] != mtime:
-                modified.append(path)
+        modified = set()
+        for path, meta in after_snapshot.items():
+            if path not in before_snapshot or before_snapshot[path] != meta:
+                modified.add(path)
+        for path in before_snapshot:
+            if path not in after_snapshot:
+                modified.add(path)
         return sorted(modified)
 
     def execute_prompt_stream(
