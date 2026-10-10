@@ -13,4 +13,10 @@ dependencies = [
 ]
 
 [project.scripts]
-infapla = "main:main"
+infapla = "infapla.cli:main"
+
+[tool.setuptools]
+packages = ["infapla", "infapla.parsers"]
+
+[tool.setuptools.package-data]
+infapla = ["templates/*", "static/css/*", "static/js/*"]

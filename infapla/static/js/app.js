@@ -1,4 +1,16 @@
 // InFaPla - Frontend Application Controller
+// Ensure fetch('/api/...') is routed relative to the app base path (e.g. /infapla/)
+const _origFetch = window.fetch;
+window.fetch = function(resource, init) {
+  if (typeof resource === 'string' && resource.startsWith('/api/')) {
+    const root = window.location.pathname.endsWith('/')
+      ? window.location.pathname
+      : window.location.pathname.replace(/\/[^\/]*$/, '/');
+    resource = root + resource.slice(1);
+  }
+  return _origFetch.call(this, resource, init);
+};
+
 const App = {
   state: {
     currentView: 'overview',

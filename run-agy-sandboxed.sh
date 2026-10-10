@@ -12,7 +12,7 @@
 set -euo pipefail
 
 # Locate agy binary
-AGY_BIN="$(command -v agy || echo "$HOME/.local/bin/agy")"
+AGY_BIN="${AGY_BIN:-$(command -v agy || echo "$HOME/.local/bin/agy")}"
 if [[ ! -x "$AGY_BIN" ]]; then
     echo "Error: agy binary not found in PATH or $HOME/.local/bin/agy" >&2
     exit 1
