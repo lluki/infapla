@@ -809,6 +809,40 @@ body {
   font-weight: 700;
   font-size: 1.05rem;
   font-family: var(--font-mono);
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+}
+
+.editor-file-path .path-segment {
+  cursor: pointer;
+  color: var(--accent);
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.editor-file-path .path-segment:hover {
+  background-color: var(--accent-soft);
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.editor-file-path .path-segment.path-file {
+  color: var(--text-primary);
+}
+
+.editor-file-path .path-segment.path-file:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.editor-file-path .path-separator {
+  color: var(--text-muted);
+  user-select: none;
+  padding: 0 0.1rem;
 }
 
 /* Content Window & Mode Tabs */

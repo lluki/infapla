@@ -710,7 +710,7 @@ const App = {
       if (btn) btn.classList.add('active');
     }
 
-    document.getElementById('editor-current-path').textContent = path;
+    this.renderPathBreadcrumbs(path, false);
     const ctxBadge = document.getElementById('file-chat-context-badge');
     if (ctxBadge) ctxBadge.textContent = `Context: ${path}`;
 
@@ -1619,7 +1619,7 @@ const App = {
     }
 
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('editor-current-path').textContent = `${folderPath}/`;
+    this.renderPathBreadcrumbs(folderPath, true);
     const ctxBadge = document.getElementById('file-chat-context-badge');
     if (ctxBadge) ctxBadge.textContent = `Folder: ${folderPath}/`;
 
@@ -1629,6 +1629,43 @@ const App = {
 
     this.switchEditorTab('special');
     this.renderSpecialView('folder', folderPath, '');
+  },
+
+  renderPathBreadcrumbs(path, isFolder = false) {
+    const el = document.getElementById('editor-current-path');
+    if (!el) return;
+
+    const cleanPath = (path || '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!cleanPath) {
+      el.textContent = '';
+      return;
+    }
+
+    const parts = cleanPath.split('/');
+    let accum = '';
+    let html = '';
+
+    parts.forEach((part, idx) => {
+      accum += (accum ? '/' : '') + part;
+      const currentAccum = accum;
+      const isLast = idx === parts.length - 1;
+
+      if (idx > 0) {
+        html += `<span class="path-separator">/</span>`;
+      }
+
+      if (isLast && !isFolder) {
+        html += `<span class="path-segment path-file" onclick="App.openFile('${currentAccum}')" title="File: ${currentAccum}">${part}</span>`;
+      } else {
+        html += `<span class="path-segment path-folder" onclick="App.openFolder('${currentAccum}')" title="Go to folder: ${currentAccum}">${part}</span>`;
+      }
+    });
+
+    if (isFolder) {
+      html += `<span class="path-separator">/</span>`;
+    }
+
+    el.innerHTML = html;
   },
 
   renderFolderContents(folderPath) {
