@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 LIST_ITEM_PATTERN = re.compile(r"^(\s*)[-*+]\s+(.*)$")
-NUMBERED_ITEM_PATTERN = re.compile(r"^(\s*)\d+\.\s+(.*)$")
+NUMBERED_ITEM_PATTERN = re.compile(r"^(\s*)\d+[.)]\s+(.*)$")
 
 def parse_recipe(content: str) -> Dict[str, Any]:
     """
