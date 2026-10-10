@@ -37,6 +37,10 @@ class SandboxRunner:
         self.effort = effort or os.environ.get("AGY_EFFORT", "low")
         if script_path and Path(script_path).exists():
             self.script_path = Path(script_path).resolve()
+        elif "INFAPLA_SANDBOX_SCRIPT" in os.environ and Path(os.environ["INFAPLA_SANDBOX_SCRIPT"]).exists():
+            self.script_path = Path(os.environ["INFAPLA_SANDBOX_SCRIPT"]).resolve()
+        elif (Path(__file__).resolve().parent.parent.parent.parent / "share" / "infapla" / "run-agy-sandboxed.sh").exists():
+            self.script_path = (Path(__file__).resolve().parent.parent.parent.parent / "share" / "infapla" / "run-agy-sandboxed.sh").resolve()
         else:
             self.script_path = (Path(__file__).resolve().parent.parent / "run-agy-sandboxed.sh").resolve()
 
