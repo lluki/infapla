@@ -3,7 +3,7 @@
 **Date**: October 10, 2026  
 **Repository**: `InFaPla` (Intelligent Family Planner)  
 **Branch**: `main`  
-**Test Suite**: 34/34 Passing (`python3 -m unittest discover tests`)
+**Test Suite**: 35/35 Passing (`python3 -m unittest discover tests`)
 
 ---
 
@@ -71,7 +71,7 @@ InFaPla/
 ### D. Special Interactive Modes
 - **Shopping List (`shopping/list.md`)**:
   - Interactive checkboxes with auto-save; completed items move to a bottom completed group with strikethrough.
-  - **🧹 Clear Checked Off** button calling `/api/shopping/clear-completed` to prune completed items cleanly.
+  - **📦 Archive Shopping List** button calling `/api/shopping/archive` to archive the current list to `shopping/list-archive/YYYY-MM-DD.md` and replace `shopping/list.md` with a clean empty shopping list.
   - AI Assistant action shortcuts: "Group by categories" and "Merge duplicates".
 - **Recipes (`shopping/recipes/*.md`)**:
   - Structured metadata tags, ingredient checklists, and step-by-step instructions.
@@ -94,7 +94,7 @@ Visit `http://localhost:8080` in your browser.
 ```bash
 python3 -m unittest discover tests
 ```
-*Current status: 33 tests passing.*
+*Current status: 35 tests passing.*
 
 ### Start with Telegram Bot (Optional)
 ```bash
