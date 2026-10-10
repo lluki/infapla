@@ -75,8 +75,7 @@ InFaPla/
   - AI Assistant action shortcuts: "Group by categories" and "Merge duplicates".
 - **Recipes (`shopping/recipes/*.md`)**:
   - Structured metadata tags, ingredient checklists, and step-by-step instructions.
-  - Clickable ingredients to add items to `shopping/list.md`.
-  - **🛒 Add Ingredients to Shopping List** button invoking the AI assistant with direct file context.
+  - Clickable ingredients and **+ Add All to Shopping List** shortcut.
 - **Calendar (`calendar/*.ics`)**:
   - Chronological schedule cards with an "+ Add Event" modal to append `.ics` VEVENT blocks.
 
