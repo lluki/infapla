@@ -17,6 +17,8 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         template_folder="templates"
     )
     app.config["JSON_AS_ASCII"] = False
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.jinja_env.auto_reload = True
 
     storage = daemon.storage
     git_mgr = daemon.git_manager
