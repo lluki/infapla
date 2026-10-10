@@ -86,5 +86,12 @@ class TestStorageAndGit(unittest.TestCase):
         self.assertIn("+", diff)
         self.assertIn("# Test Note", diff)
 
+    def test_git_sync(self):
+        self.storage.write_file("notes/sync_test.md", "# Sync Note\n")
+        res = self.git_mgr.sync("Test sync commit")
+        self.assertTrue(res["success"])
+        self.assertTrue(res["committed"])
+        self.assertFalse(self.git_mgr.is_dirty())
+
 if __name__ == "__main__":
     unittest.main()

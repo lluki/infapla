@@ -39,6 +39,11 @@ const App = {
       });
     }
 
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', (e) => {
+      this.handleRouteFromUrl(false);
+    });
+
     // Sync raw editor changes to state
     const rawEditor = document.getElementById('raw-editor-text');
     if (rawEditor) {
@@ -57,6 +62,17 @@ const App = {
       });
     }
   },
+
+  handleRouteFromUrl(push = false) {
+    const params = new URLSearchParams(window.location.search);
+    const filePath = params.get('file');
+    if (filePath) {
+      this.openFile(filePath, push);
+    } else {
+      this.showOverview(push);
+    }
+  },
+
 
   showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
@@ -79,6 +95,7 @@ const App = {
       this.checkGitStatus(),
       this.loadAppInfo()
     ]);
+    this.handleRouteFromUrl(false);
   },
 
   async loadAppInfo() {
@@ -312,33 +329,98 @@ const App = {
     const container = document.getElementById('recent-changes-content');
     if (!container) return;
     try {
-      const res = await fetch('/api/git/history?limit=5');
-      const data = await res.json();
-      const commits = data.commits || [];
+      const [historyRes, statusRes] = await Promise.all([
+        fetch('/api/git/history?limit=5'),
+        fetch('/api/git/status')
+      ]);
+      const historyData = await historyRes.json();
+      const statusData = await statusRes.json();
+      const commits = historyData.commits || [];
+      const dirty = statusData.dirty;
+      const changedFiles = statusData.changed_files || [];
 
+      container.innerHTML = '';
+
+      // Top Entry: Uncommitted Changes banner with Sync button
+      const uncommittedEl = document.createElement('div');
+      uncommittedEl.className = `uncommitted-banner ${dirty ? '' : 'clean'}`;
+
+      let uncommittedListHtml = '';
+      if (dirty && changedFiles.length > 0) {
+        uncommittedListHtml = `
+          <div class="commit-files">
+            ${changedFiles.map(f => `
+              <div class="file-diff-row">
+                <button class="file-link-title" onclick="App.openFile('${f.path}')" title="Open ${f.path}">
+                  <span>📄</span>
+                  <span>${f.path}</span>
+                  <small style="color: var(--text-muted); font-size: 0.7rem; font-family: sans-serif;">(${f.status || 'modified'})</small>
+                </button>
+                <button class="diff-action-btn" onclick="App.showFileDiff(null, '${f.path}', 'Uncommitted changes in ${f.path}')">
+                  Diff
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      uncommittedEl.innerHTML = `
+        <div class="uncommitted-header">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.1rem;">${dirty ? '⚡' : '✓'}</span>
+            <div>
+              <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-primary);">
+                ${dirty ? `Uncommitted changes (${changedFiles.length} files modified)` : 'Uncommitted changes: Clean working tree'}
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">
+                ${dirty ? 'Local changes not yet committed to Git' : 'All working tree changes are committed'}
+              </div>
+            </div>
+          </div>
+          <button class="sync-btn" id="git-sync-btn" onclick="App.syncGit()" title="Commit, pull, merge & push">
+            <span>🔄</span> <span>Sync</span>
+          </button>
+        </div>
+        ${uncommittedListHtml}
+      `;
+      container.appendChild(uncommittedEl);
+
+      // Section: Recent Commits
       if (commits.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;"><em>No commit history yet.</em></div>';
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.color = 'var(--text-muted)';
+        emptyDiv.style.fontSize = '0.85rem';
+        emptyDiv.style.padding = '0.5rem 0';
+        emptyDiv.innerHTML = '<em>No commit history yet.</em>';
+        container.appendChild(emptyDiv);
         return;
       }
 
-      container.innerHTML = '';
       commits.forEach(c => {
         const row = document.createElement('div');
         row.className = 'commit-row';
 
-        // Format files chips
+        // Vertical list of changed files with diff button per file
         let filesHtml = '';
         if (c.files && c.files.length > 0) {
           filesHtml = `
             <div class="commit-files">
-              <span style="font-size: 0.75rem; color: var(--text-muted);">Files changed:</span>
               ${c.files.map(f => `
-                <button class="file-tag-btn" onclick="App.openFile('${f}')" title="Open ${f}">
-                  <span>📄</span> <span>${f}</span>
-                </button>
+                <div class="file-diff-row">
+                  <button class="file-link-title" onclick="App.openFile('${f}')" title="Open ${f}">
+                    <span>📄</span>
+                    <span>${f}</span>
+                  </button>
+                  <button class="diff-action-btn" onclick="App.showFileDiff('${c.hash}', '${f}', '${encodeURIComponent(c.message || '')}')">
+                    Diff
+                  </button>
+                </div>
               `).join('')}
             </div>
           `;
+        } else {
+          filesHtml = '<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-top: 0.25rem;">No files changed or initial commit</div>';
         }
 
         row.innerHTML = `
@@ -351,9 +433,6 @@ const App = {
               <span class="commit-hash-pill" title="Commit Hash">${c.short_hash}</span>
               <span>by ${c.author || 'Family'}</span>
               <span>• ${c.date}</span>
-              <button class="primary-btn" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="App.showCommitDiff('${c.hash}', '${encodeURIComponent(c.message || '')}')">
-                Diff
-              </button>
             </div>
           </div>
           ${filesHtml}
@@ -366,7 +445,37 @@ const App = {
     }
   },
 
-  async showCommitDiff(commitHash, encodedMsg) {
+  async syncGit() {
+    const syncBtn = document.getElementById('git-sync-btn');
+    if (syncBtn) {
+      syncBtn.disabled = true;
+      syncBtn.innerHTML = '<span>⏳</span> <span>Syncing...</span>';
+    }
+
+    try {
+      const res = await fetch('/api/git/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `Sync: ${new Date().toLocaleString()}` })
+      });
+      const data = await res.json();
+      if (data.success) {
+        this.showToast(data.message || 'Synced successfully', 'success');
+        await this.loadRecentChanges();
+      } else {
+        this.showToast('Sync error: ' + (data.error || 'unknown'), 'info');
+      }
+    } catch (e) {
+      this.showToast('Sync failed: ' + e.message, 'info');
+    } finally {
+      if (syncBtn) {
+        syncBtn.disabled = false;
+        syncBtn.innerHTML = '<span>🔄</span> <span>Sync</span>';
+      }
+    }
+  },
+
+  async showFileDiff(commitHash, filePath, encodedMsgOrTitle) {
     const modal = document.getElementById('diff-modal');
     const content = document.getElementById('diff-modal-content');
     const title = document.getElementById('diff-modal-title');
@@ -374,21 +483,34 @@ const App = {
     if (!modal || !content) return;
 
     this.state.currentDiffHash = commitHash;
-    const msg = decodeURIComponent(encodedMsg || '');
+    const msg = decodeURIComponent(encodedMsgOrTitle || '');
     this.state.currentDiffMessage = msg;
 
-    if (title) title.textContent = msg ? `Diff: ${msg}` : `Diff for ${commitHash.substring(0, 7)}`;
-    if (subtitle) subtitle.textContent = `Commit ${commitHash}`;
-    content.innerHTML = '<div style="padding: 2.5rem; text-align: center; color: var(--text-muted);">Fetching commit diff...</div>';
+    if (title) {
+      title.textContent = filePath ? `Diff: ${filePath}` : (msg || 'Diff');
+    }
+    if (subtitle) {
+      subtitle.textContent = commitHash
+        ? `Commit ${commitHash.substring(0, 7)}: ${msg}`
+        : 'Uncommitted working tree changes vs HEAD';
+    }
+
+    content.innerHTML = '<div style="padding: 2.5rem; text-align: center; color: var(--text-muted);">Fetching file diff...</div>';
     modal.style.display = 'flex';
 
     try {
-      const res = await fetch(`/api/git/diff?commit=${encodeURIComponent(commitHash)}`);
+      let url = '/api/git/diff?';
+      const params = new URLSearchParams();
+      if (commitHash) params.set('commit', commitHash);
+      if (filePath) params.set('file', filePath);
+      url += params.toString();
+
+      const res = await fetch(url);
       const data = await res.json();
       this.state.currentDiffRaw = data.diff || '';
       this.renderDiff();
     } catch (e) {
-      console.error('Failed to load commit diff:', e);
+      console.error('Failed to load file diff:', e);
       content.innerHTML = `<div style="padding: 2rem; color: var(--danger);">Failed to load diff: ${e.message}</div>`;
     }
   },
@@ -456,16 +578,11 @@ const App = {
     try {
       const res = await fetch('/api/git/status');
       const data = await res.json();
+      const prevDirty = this.state.gitDirty;
       this.state.gitDirty = data.dirty;
-      const badge = document.getElementById('git-status-badge');
-      if (badge) {
-        if (data.dirty) {
-          badge.className = 'status-badge dirty';
-          badge.textContent = `Git: ${data.changed_files.length} changed`;
-        } else {
-          badge.className = 'status-badge clean';
-          badge.textContent = 'Git: Synced';
-        }
+      // If dirty status changed, refresh the Recent changes uncommitted section
+      if (prevDirty !== data.dirty && this.state.currentView === 'overview') {
+        this.loadRecentChanges();
       }
     } catch (e) {
       console.error('Git status error:', e);
@@ -490,13 +607,22 @@ const App = {
     }
   },
 
-  showOverview() {
+  showOverview(push = true) {
     this.state.currentView = 'overview';
     this.state.currentFilePath = null;
     document.getElementById('view-overview').style.display = 'flex';
     document.getElementById('view-editor').style.display = 'none';
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('nav-overview').classList.add('active');
+    const navOv = document.getElementById('nav-overview');
+    if (navOv) navOv.classList.add('active');
+
+    if (push) {
+      const newUrl = window.location.pathname;
+      if (window.location.search) {
+        history.pushState({ view: 'overview' }, '', newUrl);
+      }
+    }
+
     this.renderFileTree();
     this.loadDashboardData();
   },
@@ -506,11 +632,31 @@ const App = {
     this.openFile(calFile ? calFile.path : 'calendar/family.ics');
   },
 
-  async openFile(path) {
+  async openFile(path, push = true) {
     this.state.currentView = 'editor';
     this.state.currentFilePath = path;
     document.getElementById('view-overview').style.display = 'none';
     document.getElementById('view-editor').style.display = 'flex';
+
+    if (push) {
+      const newUrl = `${window.location.pathname}?file=${encodeURIComponent(path)}`;
+      if (window.location.search !== `?file=${encodeURIComponent(path)}`) {
+        history.pushState({ view: 'editor', path }, '', newUrl);
+      }
+    }
+
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    // Highlight specific nav buttons if match
+    if (path === 'shopping/list.md') {
+      const btn = document.querySelector(".header-nav button[onclick*='shopping/list.md']");
+      if (btn) btn.classList.add('active');
+    } else if (path === 'todo/list.md') {
+      const btn = document.querySelector(".header-nav button[onclick*='todo/list.md']");
+      if (btn) btn.classList.add('active');
+    } else if (path.endsWith('.ics')) {
+      const btn = document.querySelector(".header-nav button[onclick*='calendar']");
+      if (btn) btn.classList.add('active');
+    }
 
     document.getElementById('editor-current-path').textContent = path;
     const ctxBadge = document.getElementById('file-chat-context-badge');

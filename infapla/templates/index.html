@@ -36,14 +36,6 @@
         <span>📅</span><span class="nav-text">Calendar</span>
       </button>
     </nav>
-
-    <div class="header-status">
-      <span class="status-badge" style="background: rgba(56, 189, 248, 0.15); color: var(--accent);" id="ai-model-badge" title="Active AI Model">⚡ Flash (Fast)</span>
-      <span class="status-badge clean" id="git-status-badge">Git: Synced</span>
-      <button class="nav-btn" onclick="App.manualCommit()" title="Save & commit changes to Git">
-        <span>💾</span><span class="nav-text">Commit</span>
-      </button>
-    </div>
   </header>
 
   <!-- Main Layout -->
@@ -60,7 +52,6 @@
             <div class="ai-chat-title">
               <span>🤖</span> InFaPla AI Family Assistant
             </div>
-            <span class="chat-context-badge">Full Workspace Access (Bubblewrap Sandboxed)</span>
           </div>
 
           <div class="ai-messages-list" id="overview-chat-messages">
@@ -185,7 +176,7 @@
             <!-- Dynamic Primary Special Tab -->
             <button class="editor-tab primary-special" id="tab-special" onclick="App.switchEditorTab('special')">Interactive View</button>
             <!-- Default WYSIWYG / Rendered Tab -->
-            <button class="editor-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Preview (WYSIWYG)</button>
+            <button class="editor-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Preview</button>
             <!-- RAW Editor Tab -->
             <button class="editor-tab" id="tab-raw" onclick="App.switchEditorTab('raw')">RAW Editor</button>
           </div>

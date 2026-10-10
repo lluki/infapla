@@ -11,7 +11,7 @@ logger = logging.getLogger("infapla.git")
 class GitManager:
     def __init__(self, repo_dir: Path):
         self.repo_dir = Path(repo_dir).resolve()
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.ensure_repo()
 
     def _run_git(self, args: List[str], check: bool = True) -> subprocess.CompletedProcess:
@@ -188,6 +188,37 @@ class GitManager:
                 args += ["--", file_path]
             res = self._run_git(args, check=False)
             return res.stdout
+
+    def sync(self, message: Optional[str] = None) -> Dict[str, Any]:
+        """Commit local uncommitted changes, then pull with merge and push if a remote exists."""
+        with self.lock:
+            commit_hash = None
+            if self.is_dirty():
+                commit_hash = self.commit(message or "Sync changes")
+
+            # Check if any remote is configured
+            remotes_res = self._run_git(["remote"], check=False)
+            has_remote = bool(remotes_res.stdout.strip())
+            pull_output = ""
+            push_output = ""
+
+            if has_remote:
+                pull_res = self._run_git(["pull", "--no-rebase"], check=False)
+                pull_output = pull_res.stdout + pull_res.stderr
+                push_res = self._run_git(["push"], check=False)
+                push_output = push_res.stdout + push_res.stderr
+
+            return {
+                "success": True,
+                "committed": bool(commit_hash),
+                "commit_hash": commit_hash,
+                "has_remote": has_remote,
+                "pull_output": pull_output,
+                "push_output": push_output,
+                "message": "Committed and synced successfully" if has_remote else (
+                    "Committed changes (no remote configured to push/pull)" if commit_hash else "No uncommitted changes (no remote configured)"
+                )
+            }
 
 class PeriodicCommitter:
     def __init__(self, git_mgr: GitManager, interval_seconds: int = 30):

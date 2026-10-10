@@ -122,5 +122,9 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(res_diff.status_code, 200)
         self.assertIn("diff", res_diff.get_json())
 
+        res_sync = self.client.post("/api/git/sync", json={"message": "Sync from API test"})
+        self.assertEqual(res_sync.status_code, 200)
+        self.assertTrue(res_sync.get_json()["success"])
+
 if __name__ == "__main__":
     unittest.main()

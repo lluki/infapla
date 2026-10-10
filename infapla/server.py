@@ -135,6 +135,13 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         commit_hash = git_mgr.commit(msg)
         return jsonify({"success": True, "commit": commit_hash})
 
+    @app.route("/api/git/sync", methods=["POST"])
+    def git_sync():
+        data = request.get_json(force=True) or {}
+        msg = data.get("message")
+        result = git_mgr.sync(msg)
+        return jsonify(result)
+
     # Specialized: Shopping list
     @app.route("/api/shopping", methods=["GET"])
     def get_shopping():
