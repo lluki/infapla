@@ -61,6 +61,17 @@ class TestStorageAndGit(unittest.TestCase):
         done_items = [i for i in cleared["items"] if i["done"]]
         self.assertEqual(len(done_items), 0)
 
+        # Archive shopping list
+        self.storage.add_shopping("Milk")
+        archived = self.storage.archive_shopping_list(target_date="2026-10-10")
+        self.assertEqual(archived["archived_to"], "shopping/list-archive/2026-10-10.md")
+        self.assertTrue(self.storage.resolve_path("shopping/list-archive/2026-10-10.md").exists())
+        archived_content = self.storage.read_file("shopping/list-archive/2026-10-10.md")
+        self.assertIn("Milk", archived_content)
+        # Replaced with empty list
+        empty_data = self.storage.get_shopping_data()
+        self.assertEqual(len(empty_data["items"]), 0)
+
 
     def test_todo_operations(self):
         self.storage.add_todo("Test family task")

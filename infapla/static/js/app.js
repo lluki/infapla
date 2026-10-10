@@ -1090,9 +1090,6 @@ const App = {
   },
 
   async archiveShoppingList() {
-    if (!confirm('Archive current shopping list to shopping/list-archive/ and start a fresh empty list?')) {
-      return;
-    }
     try {
       const res = await fetch('/api/shopping/archive', {
         method: 'POST',
@@ -1103,7 +1100,7 @@ const App = {
       this.syncCurrentFileContent();
       this.showToast(`Archived shopping list to ${data.archived_to || 'archive'}!`, 'success');
       this.loadDashboardData();
-      this.loadFilesTree();
+      this.loadFiles();
     } catch (e) {
       this.showToast('Failed to archive shopping list', 'info');
     }
