@@ -51,7 +51,7 @@ class TestShoppingParser(unittest.TestCase):
         self.assertTrue(data["items"][-1]["done"])
 
     def test_toggle_shopping_item_to_done(self):
-        # Toggle 'Apples' to done -> should move to bottom
+        # Toggle 'Apples' to done -> should move to bottom with category postfix
         new_md = toggle_shopping_item(self.sample_md, "Apples")
         data = parse_shopping_list(new_md)
         self.assertEqual(data["active_count"], 2)
@@ -60,14 +60,26 @@ class TestShoppingParser(unittest.TestCase):
         last_item = data["items"][-1]
         self.assertTrue(last_item["done"])
         self.assertIn("## Completed", new_md)
-        self.assertIn("- [x] ~~Apples~~", new_md)
+        self.assertIn("- [x] ~~Apples category: Produce~~", new_md)
 
     def test_toggle_shopping_item_back_to_active(self):
-        # Toggle 'Bread' from done to active
+        # Toggle 'Bread' from done to active (no postfix -> General)
         new_md = toggle_shopping_item(self.sample_md, "Bread")
         data = parse_shopping_list(new_md)
         self.assertEqual(data["active_count"], 4)
         self.assertEqual(data["done_count"], 1)
+
+        # Toggle 'Apples' to done and then back -> restores to Produce
+        done_md = toggle_shopping_item(self.sample_md, "Apples")
+        self.assertIn("- [x] ~~Apples category: Produce~~", done_md)
+        restored_md = toggle_shopping_item(done_md, "Apples")
+        data_restored = parse_shopping_list(restored_md)
+        self.assertEqual(data_restored["active_count"], 3)
+        self.assertEqual(data_restored["done_count"], 2)
+        self.assertIn("## Produce", restored_md)
+        self.assertIn("- [ ] Apples", restored_md)
+        apples_item = next(i for i in data_restored["items"] if i["text"] == "Apples")
+        self.assertEqual(apples_item["category"], "Produce")
 
     def test_add_and_remove_shopping_item(self):
         added = add_shopping_item(self.sample_md, "Orange Juice", "Beverages")

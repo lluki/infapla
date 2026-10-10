@@ -70,7 +70,7 @@ InFaPla/
 
 ### D. Special Interactive Modes
 - **Shopping List (`shopping/list.md`)**:
-  - Interactive checkboxes with auto-save; completed items move to a bottom completed group with strikethrough.
+  - Interactive checkboxes with auto-save; completed items move to a bottom completed group with strikethrough and a ` category: CAT` postfix, enabling items to return to their original category when unclicked.
   - **📦 Archive Shopping List** button calling `/api/shopping/archive` to archive the current list to `shopping/list-archive/YYYY-MM-DD.md` and replace `shopping/list.md` with a clean empty shopping list.
   - AI Assistant action shortcuts: "Group by categories" and "Merge duplicates".
 - **Recipes (`shopping/recipes/*.md`)**:

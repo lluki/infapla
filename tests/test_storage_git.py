@@ -49,6 +49,12 @@ class TestStorageAndGit(unittest.TestCase):
         strawberries = next(i for i in toggled["items"] if i["text"] == "Fresh Strawberries")
         self.assertTrue(strawberries["done"])
 
+        # Toggle back -> should remember Produce category
+        toggled_back = self.storage.toggle_shopping("Fresh Strawberries")
+        strawberries_back = next(i for i in toggled_back["items"] if i["text"] == "Fresh Strawberries")
+        self.assertFalse(strawberries_back["done"])
+        self.assertEqual(strawberries_back["category"], "Produce")
+
         # Remove item
         removed = self.storage.remove_shopping("Fresh Strawberries")
         texts_after = [i["text"] for i in removed["items"]]

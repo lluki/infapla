@@ -60,15 +60,35 @@ def parse_shopping_list(content: str) -> Dict[str, Any]:
             
             # Clean strike-through if present in markdown text
             display_text = item_text
+            if " category: " in display_text:
+                base_part, sep, cat_part = display_text.rpartition(" category: ")
+                if base_part.startswith("~~") and base_part.endswith("~~") and len(base_part) > 4:
+                    base_part = base_part[2:-2].strip()
+                display_text = f"{base_part}{sep}{cat_part}"
             if display_text.startswith("~~") and display_text.endswith("~~") and len(display_text) > 4:
                 display_text = display_text[2:-2].strip()
 
-            cat = "Completed" if (is_done or current_category.lower() in ("completed", "done")) else current_category
+            saved_cat = None
+            if is_done or current_category.lower() in ("completed", "done"):
+                if " category: " in display_text:
+                    base_text, _, saved_cat = display_text.rpartition(" category: ")
+                    display_text = base_text.strip()
+                    saved_cat = saved_cat.strip()
+                cat = "Completed"
+            else:
+                if " category: " in display_text:
+                    base_text, _, saved_cat = display_text.rpartition(" category: ")
+                    display_text = base_text.strip()
+                    if current_category.lower() in ("completed", "done", "general", "") and saved_cat:
+                        current_category = saved_cat.strip()
+                cat = current_category
+
             items.append({
                 "id": f"item_{item_counter}",
                 "text": display_text,
                 "done": is_done,
                 "category": cat,
+                "saved_category": saved_cat,
                 "raw_line": line,
                 "line_index": idx
             })
@@ -80,15 +100,36 @@ def parse_shopping_list(content: str) -> Dict[str, Any]:
             item_text = bullet_match.group(2).strip()
             is_done = current_category.lower() in ("completed", "done")
             display_text = item_text
+            if " category: " in display_text:
+                base_part, sep, cat_part = display_text.rpartition(" category: ")
+                if base_part.startswith("~~") and base_part.endswith("~~") and len(base_part) > 4:
+                    base_part = base_part[2:-2].strip()
+                display_text = f"{base_part}{sep}{cat_part}"
             if display_text.startswith("~~") and display_text.endswith("~~") and len(display_text) > 4:
                 display_text = display_text[2:-2].strip()
                 is_done = True
-            cat = "Completed" if is_done else current_category
+
+            saved_cat = None
+            if is_done or current_category.lower() in ("completed", "done"):
+                if " category: " in display_text:
+                    base_text, _, saved_cat = display_text.rpartition(" category: ")
+                    display_text = base_text.strip()
+                    saved_cat = saved_cat.strip()
+                cat = "Completed"
+            else:
+                if " category: " in display_text:
+                    base_text, _, saved_cat = display_text.rpartition(" category: ")
+                    display_text = base_text.strip()
+                    if current_category.lower() in ("completed", "done", "general", "") and saved_cat:
+                        current_category = saved_cat.strip()
+                cat = current_category
+
             items.append({
                 "id": f"item_{item_counter}",
                 "text": display_text,
                 "done": is_done,
                 "category": cat,
+                "saved_category": saved_cat,
                 "raw_line": line,
                 "line_index": idx
             })
@@ -108,6 +149,7 @@ def parse_shopping_list(content: str) -> Dict[str, Any]:
 def format_shopping_list(parsed: Dict[str, Any]) -> str:
     """
     Serializes items back to clean markdown with done items at the bottom.
+    Preserves categories on completed items via ' category: CAT' postfix.
     """
     lines = [f"# {parsed.get('title', 'Shopping List')}", ""]
     
@@ -121,7 +163,8 @@ def format_shopping_list(parsed: Dict[str, Any]) -> str:
     for item in active_items:
         cat = item.get("category", "General")
         if cat.lower() in ("completed", "done"):
-            cat = "General"
+            cat = item.get("saved_category") or "General"
+            item["category"] = cat
         if cat not in by_category:
             by_category[cat] = []
             category_order.append(cat)
@@ -143,8 +186,12 @@ def format_shopping_list(parsed: Dict[str, Any]) -> str:
     if done_items:
         lines.append("## Completed")
         for item in done_items:
-            # Marked as cross through at the bottom
-            lines.append(f"- [x] ~~{item['text']}~~")
+            text = item.get("text", "").strip()
+            saved_cat = item.get("saved_category")
+            if saved_cat and saved_cat.lower() not in ("completed", "done"):
+                if " category: " not in text:
+                    text = f"{text} category: {saved_cat}"
+            lines.append(f"- [x] ~~{text}~~")
         lines.append("")
 
     return "\n".join(lines).strip() + "\n"
@@ -152,15 +199,48 @@ def format_shopping_list(parsed: Dict[str, Any]) -> str:
 def toggle_shopping_item(content: str, item_id_or_text: str) -> str:
     """
     Toggles the done state of an item and pushes done items to the bottom.
+    When moving to completed, records ' category: CAT' in the markdown item.
+    When unclicking, restores the item to CAT if ' category: ' is present.
     """
     parsed = parse_shopping_list(content)
     target = item_id_or_text.strip().lower()
 
     for item in parsed["items"]:
-        if item["id"] == item_id_or_text or item["text"].strip().lower() == target:
+        item_text_lower = item["text"].strip().lower()
+        full_text_lower = (
+            f"{item['text']} category: {item.get('saved_category', '')}".strip().lower()
+            if item.get("saved_category")
+            else item_text_lower
+        )
+        base_text_lower = (
+            item["text"].rpartition(" category: ")[0].strip().lower()
+            if " category: " in item["text"]
+            else item_text_lower
+        )
+
+        if (
+            item["id"] == item_id_or_text
+            or item_text_lower == target
+            or full_text_lower == target
+            or base_text_lower == target
+        ):
             item["done"] = not item["done"]
             if item["done"]:
+                prev_cat = item.get("category", "General")
+                if prev_cat.lower() in ("completed", "done"):
+                    prev_cat = item.get("saved_category") or "General"
+                item["saved_category"] = prev_cat
                 item["category"] = "Completed"
+            else:
+                restored_cat = item.get("saved_category")
+                if not restored_cat and " category: " in item["text"]:
+                    base_t, _, restored_cat = item["text"].rpartition(" category: ")
+                    item["text"] = base_t.strip()
+                if restored_cat and restored_cat.lower() not in ("completed", "done"):
+                    item["category"] = restored_cat
+                else:
+                    item["category"] = "General"
+                item["saved_category"] = None
             break
 
     return format_shopping_list(parsed)
@@ -192,7 +272,13 @@ def remove_shopping_item(content: str, item_id_or_text: str) -> str:
     target = item_id_or_text.strip().lower()
     parsed["items"] = [
         i for i in parsed["items"]
-        if i["id"] != item_id_or_text and i["text"].strip().lower() != target
+        if i["id"] != item_id_or_text
+        and i["text"].strip().lower() != target
+        and (
+            f"{i['text']} category: {i.get('saved_category', '')}".strip().lower() != target
+            if i.get("saved_category")
+            else True
+        )
     ]
     return format_shopping_list(parsed)
 

@@ -63,12 +63,20 @@ class TestServerAPI(unittest.TestCase):
         data_add = res_add.get_json()
         self.assertTrue(any(i["text"] == "Organic Apples" for i in data_add["items"]))
 
-        # TOGGLE shopping
+        # TOGGLE shopping to done and verify category postfix remembered
         res_toggle = self.client.post("/api/shopping/toggle", json={"text": "Organic Apples"})
         self.assertEqual(res_toggle.status_code, 200)
         data_toggle = res_toggle.get_json()
         item = next(i for i in data_toggle["items"] if i["text"] == "Organic Apples")
         self.assertTrue(item["done"])
+
+        # TOGGLE shopping back to active -> must remember Produce category
+        res_toggle_back = self.client.post("/api/shopping/toggle", json={"text": "Organic Apples"})
+        self.assertEqual(res_toggle_back.status_code, 200)
+        data_toggle_back = res_toggle_back.get_json()
+        item_back = next(i for i in data_toggle_back["items"] if i["text"] == "Organic Apples")
+        self.assertFalse(item_back["done"])
+        self.assertEqual(item_back["category"], "Produce")
 
         # REMOVE shopping
         res_del = self.client.post("/api/shopping/remove", json={"text": "Organic Apples"})
