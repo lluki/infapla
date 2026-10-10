@@ -129,8 +129,8 @@
             <div class="card-content-preview" id="dash-recipe-preview">
               Loading family favorites...
             </div>
-            <div class="card-footer">
-              <button class="primary-btn" onclick="App.openFile('shopping/mealplan/2026-10-12.md')">View Meal Plan →</button>
+            <div class="card-footer" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="primary-btn" onclick="App.openFolder('shopping')">Browse Recipes & Meals →</button>
             </div>
         </div>
         <!-- End .dashboard-grid -->
@@ -231,6 +231,7 @@
               <div class="list-add-box">
                 <input type="text" id="add-shopping-input" class="list-input" placeholder="Add an item to the shopping list (press Enter)..." onkeydown="if(event.key==='Enter') App.addShoppingItem()">
                 <button class="primary-btn" onclick="App.addShoppingItem()">Add</button>
+                <button class="action-pill-btn" onclick="App.clearShoppingChecked()" title="Remove all checked-off items">🧹 Clear Checked Off</button>
               </div>
               <div id="special-shopping-items" class="items-group">
                 <!-- Shopping items inserted here -->
@@ -240,8 +241,15 @@
             <!-- Recipe Special View -->
             <div id="special-recipe-container" class="recipe-view-ui" style="display: none;">
               <div class="recipe-header-card">
-                <h1 id="recipe-title" style="font-size: 1.6rem; color: var(--text-primary);">Recipe Title</h1>
-                <div class="recipe-meta-tags" id="recipe-meta"></div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+                  <div>
+                    <h1 id="recipe-title" style="font-size: 1.6rem; color: var(--text-primary);">Recipe Title</h1>
+                    <div class="recipe-meta-tags" id="recipe-meta"></div>
+                  </div>
+                  <button class="primary-btn" onclick="App.addRecipeIngredientsViaAI()" title="Use AI to parse and add ingredients to shopping list">
+                    <span>🛒</span> Add Ingredients to Shopping List
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -280,6 +288,21 @@
                 <button class="primary-btn" onclick="App.showAddEventModal()">+ Add Event</button>
               </div>
               <div class="events-list" id="special-calendar-events"></div>
+            </div>
+
+            <!-- Folder Navigation Special View -->
+            <div id="special-folder-container" style="display: none; flex-direction: column; gap: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                <div id="folder-view-breadcrumbs" style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 1.05rem;">
+                  <!-- Breadcrumbs inserted here -->
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                  <button class="action-pill-btn" onclick="App.promptNewFileInCurrentFolder()">+ New File in Folder</button>
+                </div>
+              </div>
+              <div id="folder-view-items" class="folder-items-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem;">
+                <!-- Folder items inserted here -->
+              </div>
             </div>
 
           </div>

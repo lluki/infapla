@@ -195,3 +195,12 @@ def remove_shopping_item(content: str, item_id_or_text: str) -> str:
         if i["id"] != item_id_or_text and i["text"].strip().lower() != target
     ]
     return format_shopping_list(parsed)
+
+def clear_completed_items(content: str) -> str:
+    """
+    Removes all checked-off (done) items from the shopping list.
+    """
+    parsed = parse_shopping_list(content)
+    parsed["items"] = [i for i in parsed["items"] if not i.get("done")]
+    return format_shopping_list(parsed)
+

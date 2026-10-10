@@ -66,8 +66,11 @@ const App = {
   handleRouteFromUrl(push = false) {
     const params = new URLSearchParams(window.location.search);
     const filePath = params.get('file');
+    const folderPath = params.get('folder');
     if (filePath) {
       this.openFile(filePath, push);
+    } else if (folderPath) {
+      this.openFolder(folderPath, push);
     } else {
       this.showOverview(push);
     }
@@ -796,7 +799,7 @@ const App = {
 
   async renderSpecialView(type, path, content) {
     // Hide all special subcontainers
-    ['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].forEach(k => {
+    ['shopping', 'recipe', 'mealplan', 'todo', 'calendar', 'folder'].forEach(k => {
       const c = document.getElementById(`special-${k}-container`);
       if (c) c.style.display = 'none';
     });
@@ -821,6 +824,10 @@ const App = {
       const container = document.getElementById('special-calendar-container');
       container.style.display = 'flex';
       await this.loadSpecialCalendarUI();
+    } else if (type === 'folder') {
+      const container = document.getElementById('special-folder-container');
+      container.style.display = 'flex';
+      this.renderFolderContents(path);
     }
   },
 
@@ -957,6 +964,22 @@ const App = {
     }
   },
 
+  async clearShoppingChecked() {
+    try {
+      const res = await fetch('/api/shopping/clear-completed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      await this.loadSpecialShoppingUI();
+      this.syncCurrentFileContent();
+      this.showToast('Cleared completed items!', 'success');
+      this.loadDashboardData();
+    } catch (e) {
+      this.showToast('Failed to clear completed items', 'info');
+    }
+  },
+
   // ===== Special Recipe UI =====
   async loadSpecialRecipeUI(path) {
     try {
@@ -1041,6 +1064,27 @@ const App = {
     this.showToast(`Added ${count} ingredients to shopping list!`, 'success');
     this.loadDashboardData();
   },
+
+  async addRecipeIngredientsViaAI() {
+    const title = document.getElementById('recipe-title')?.textContent || 'this recipe';
+    const promptText = `Please read the ingredients from this recipe (${title} at ${this.state.currentFilePath}) and add all required items to shopping/list.md, grouping them cleanly into appropriate categories.`;
+    
+    // Ensure file chat is expanded
+    const body = document.getElementById('file-chat-body');
+    const btn = document.getElementById('toggle-chat-collapse');
+    if (body && body.style.display === 'none') {
+      body.style.display = 'block';
+      if (btn) btn.textContent = '▾';
+    }
+
+    const input = document.getElementById('file-chat-input');
+    if (input) input.value = promptText;
+
+    // Send AI prompt and execute
+    await this.sendChatPrompt(promptText, 'file-chat-messages', this.state.currentFilePath, this.state.currentFileContent);
+    if (input) input.value = '';
+  },
+
 
   // ===== Special Meal Plan UI =====
   async loadSpecialMealplanUI(path) {
@@ -1326,6 +1370,169 @@ const App = {
       }
     });
   },
+
+  promptNewFileInCurrentFolder() {
+    const folder = this.state.currentFolderPath || 'shopping';
+    const filename = prompt(`Create new markdown file in ${folder}/:`, 'new-item.md');
+    if (!filename) return;
+    const cleanName = filename.endsWith('.md') ? filename : `${filename}.md`;
+    const fullPath = `${folder}/${cleanName}`;
+    fetch('/api/file/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: fullPath, content: `# ${cleanName.replace('.md', '')}\n\n` })
+    }).then(r => r.json()).then(data => {
+      if (data.success) {
+        this.loadFiles();
+        this.openFile(fullPath);
+      }
+    });
+  },
+
+  openFolder(folderPath, push = true) {
+    this.state.currentView = 'folder';
+    this.state.currentFolderPath = folderPath;
+    this.state.currentFilePath = null;
+    this.state.currentFileType = 'folder';
+
+    document.getElementById('view-overview').style.display = 'none';
+    document.getElementById('view-editor').style.display = 'flex';
+
+    if (push) {
+      const newUrl = `${window.location.pathname}?folder=${encodeURIComponent(folderPath)}`;
+      if (window.location.search !== `?folder=${encodeURIComponent(folderPath)}`) {
+        history.pushState({ view: 'folder', folder: folderPath }, '', newUrl);
+      }
+    }
+
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('editor-current-path').textContent = `${folderPath}/`;
+    const ctxBadge = document.getElementById('file-chat-context-badge');
+    if (ctxBadge) ctxBadge.textContent = `Folder: ${folderPath}/`;
+
+    // Setup tabs for folder view: only Special (Folder) tab active
+    const tabSpecial = document.getElementById('tab-special');
+    const tabWysiwyg = document.getElementById('tab-wysiwyg');
+    const tabRaw = document.getElementById('tab-raw');
+    tabSpecial.style.display = 'inline-block';
+    tabSpecial.textContent = '📁 Folder View';
+    tabWysiwyg.style.display = 'none';
+    tabRaw.style.display = 'none';
+
+    this.switchEditorTab('special');
+    this.renderSpecialView('folder', folderPath, '');
+  },
+
+  renderFolderContents(folderPath) {
+    const breadcrumbs = document.getElementById('folder-view-breadcrumbs');
+    const grid = document.getElementById('folder-view-items');
+    if (!breadcrumbs || !grid) return;
+
+    // Build breadcrumbs
+    const parts = folderPath.split('/').filter(Boolean);
+    let breadcrumbsHtml = `<span style="cursor: pointer; color: var(--accent);" onclick="App.showOverview()">🏠 Overview</span>`;
+    let accum = '';
+    parts.forEach((p, idx) => {
+      accum += (accum ? '/' : '') + p;
+      const currentAccum = accum;
+      breadcrumbsHtml += ` <span style="color: var(--text-muted);">/</span> `;
+      if (idx === parts.length - 1) {
+        breadcrumbsHtml += `<span style="color: var(--text-primary);">${p}</span>`;
+      } else {
+        breadcrumbsHtml += `<span style="cursor: pointer; color: var(--accent);" onclick="App.openFolder('${currentAccum}')">${p}</span>`;
+      }
+    });
+    breadcrumbs.innerHTML = breadcrumbsHtml;
+
+    // Filter files and immediate subdirectories in this folder
+    const prefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
+    const subfolderMap = new Map();
+    const directFiles = [];
+
+    this.state.files.forEach(f => {
+      if (f.path.startsWith(prefix)) {
+        const rel = f.path.substring(prefix.length);
+        const relParts = rel.split('/');
+        if (relParts.length > 1) {
+          const subDirName = relParts[0];
+          const subDirPath = `${folderPath}/${subDirName}`;
+          if (!subfolderMap.has(subDirName)) {
+            subfolderMap.set(subDirName, { name: subDirName, path: subDirPath, count: 1 });
+          } else {
+            subfolderMap.get(subDirName).count++;
+          }
+        } else {
+          directFiles.push(f);
+        }
+      }
+    });
+
+    grid.innerHTML = '';
+
+    // Render Parent Folder button if not root
+    if (parts.length > 1) {
+      const parentPath = parts.slice(0, -1).join('/');
+      const parentCard = document.createElement('div');
+      parentCard.className = 'folder-card';
+      parentCard.innerHTML = `
+        <span class="folder-card-icon">⬆️</span>
+        <div class="folder-card-info">
+          <span class="folder-card-title">.. (Parent Folder)</span>
+          <span class="folder-card-sub">Go up to ${parentPath}</span>
+        </div>
+      `;
+      parentCard.onclick = () => this.openFolder(parentPath);
+      grid.appendChild(parentCard);
+    }
+
+    // Render Subfolders
+    Array.from(subfolderMap.values()).sort((a, b) => a.name.localeCompare(b.name)).forEach(sub => {
+      const card = document.createElement('div');
+      card.className = 'folder-card';
+      const icon = sub.path.includes('recipes') ? '🍲' : (sub.path.includes('mealplan') ? '📋' : '📁');
+      card.innerHTML = `
+        <span class="folder-card-icon">${icon}</span>
+        <div class="folder-card-info">
+          <span class="folder-card-title">${sub.name}/</span>
+          <span class="folder-card-sub">${sub.count} ${sub.count === 1 ? 'file' : 'files'}</span>
+        </div>
+      `;
+      card.onclick = () => this.openFolder(sub.path);
+      grid.appendChild(card);
+    });
+
+    // Render Direct Files
+    const fileIconMap = {
+      shopping: '🛒',
+      recipe: '🍲',
+      mealplan: '📋',
+      todo: '✅',
+      calendar: '📅',
+      markdown: '📝',
+      generic: '📄'
+    };
+
+    directFiles.sort((a, b) => a.name.localeCompare(b.name)).forEach(file => {
+      const card = document.createElement('div');
+      card.className = 'folder-card';
+      const icon = fileIconMap[file.type] || '📄';
+      const displayName = file.name.replace(/\.md$/, '');
+      card.innerHTML = `
+        <span class="folder-card-icon">${icon}</span>
+        <div class="folder-card-info">
+          <span class="folder-card-title">${displayName}</span>
+          <span class="folder-card-sub">${file.path}</span>
+        </div>
+      `;
+      card.onclick = () => this.openFile(file.path);
+      grid.appendChild(card);
+    });
+
+    if (subfolderMap.size === 0 && directFiles.length === 0) {
+      grid.innerHTML = '<div style="color: var(--text-muted); padding: 1.5rem; grid-column: 1 / -1;"><em>This folder is empty.</em></div>';
+    }
+  },
+
 
   // ===== AI Chat Handlers =====
   async handleOverviewChatSubmit(e) {

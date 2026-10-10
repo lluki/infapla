@@ -74,6 +74,14 @@ class TestServerAPI(unittest.TestCase):
         res_del = self.client.post("/api/shopping/remove", json={"text": "Organic Apples"})
         self.assertEqual(res_del.status_code, 200)
 
+        # CLEAR COMPLETED shopping
+        self.client.post("/api/shopping/add", json={"text": "Bananas"})
+        self.client.post("/api/shopping/toggle", json={"text": "Bananas"})
+        res_clear = self.client.post("/api/shopping/clear-completed")
+        self.assertEqual(res_clear.status_code, 200)
+        done_items = [i for i in res_clear.get_json()["items"] if i["done"]]
+        self.assertEqual(len(done_items), 0)
+
     def test_todo_api(self):
         # ADD todo
         res_add = self.client.post("/api/todo/add", json={"text": "Mow the lawn"})

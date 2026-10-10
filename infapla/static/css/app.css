@@ -819,6 +819,52 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
+/* Folder View Card Grid */
+.folder-card {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.folder-card:hover {
+  border-color: var(--accent);
+  background-color: rgba(56, 189, 248, 0.08);
+  transform: translateY(-1px);
+}
+
+.folder-card-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.folder-card-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 0.15rem;
+}
+
+.folder-card-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-card-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* Specialized Shopping List UI */
 .shopping-list-ui {
   display: flex;

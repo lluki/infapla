@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
-from .parsers.shopping import parse_shopping_list, add_shopping_item, toggle_shopping_item, remove_shopping_item
+from .parsers.shopping import parse_shopping_list, add_shopping_item, toggle_shopping_item, remove_shopping_item, clear_completed_items
 from .parsers.recipe import parse_recipe
 from .parsers.todo import parse_todo_list, add_todo_item, toggle_todo_item, remove_todo_item
 from .parsers.calendar import parse_ics_file, create_ics_event
@@ -257,6 +257,12 @@ class Storage:
     def remove_shopping(self, item_id_or_text: str) -> Dict[str, Any]:
         content = self.read_file("shopping/list.md")
         new_content = remove_shopping_item(content, item_id_or_text)
+        self.write_file("shopping/list.md", new_content)
+        return parse_shopping_list(new_content)
+
+    def clear_shopping_completed(self) -> Dict[str, Any]:
+        content = self.read_file("shopping/list.md")
+        new_content = clear_completed_items(content)
         self.write_file("shopping/list.md", new_content)
         return parse_shopping_list(new_content)
 

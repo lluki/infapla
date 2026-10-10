@@ -54,6 +54,14 @@ class TestStorageAndGit(unittest.TestCase):
         texts_after = [i["text"] for i in removed["items"]]
         self.assertNotIn("Fresh Strawberries", texts_after)
 
+        # Clear completed
+        self.storage.add_shopping("Apples")
+        self.storage.toggle_shopping("Apples")
+        cleared = self.storage.clear_shopping_completed()
+        done_items = [i for i in cleared["items"] if i["done"]]
+        self.assertEqual(len(done_items), 0)
+
+
     def test_todo_operations(self):
         self.storage.add_todo("Test family task")
         data = self.storage.get_todo_data()
