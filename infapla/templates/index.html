@@ -165,20 +165,11 @@
       <!-- ================= VIEW 2: FILE VIEWER / EDITOR ================= -->
       <section id="view-editor" style="display: none;" class="editor-view-container">
         
-        <!-- Editor Header & Tabs -->
+        <!-- Editor Header -->
         <div class="editor-toolbar">
           <div class="editor-file-info">
             <button class="back-to-dash-btn" onclick="App.showOverview()">← Overview</button>
             <span class="editor-file-path" id="editor-current-path">file.md</span>
-          </div>
-
-          <div class="tab-bar">
-            <!-- Dynamic Primary Special Tab -->
-            <button class="editor-tab primary-special" id="tab-special" onclick="App.switchEditorTab('special')">✨ Interactive</button>
-            <!-- Visual / Rendered Tab -->
-            <button class="editor-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Visual</button>
-            <!-- RAW Editor Tab -->
-            <button class="editor-tab" id="tab-raw" onclick="App.switchEditorTab('raw')">Raw</button>
           </div>
         </div>
 
@@ -220,8 +211,19 @@
           </div>
         </div>
 
-        <!-- Panes Container -->
-        <div class="pane-content">
+        <!-- Content Window with Mode Tabs -->
+        <div class="editor-content-window">
+          <div class="content-tabs-bar" id="content-tab-bar">
+            <!-- Dynamic Primary Special Tab -->
+            <button class="content-tab" id="tab-special" onclick="App.switchEditorTab('special')">Interactive</button>
+            <!-- Visual / Rendered Tab -->
+            <button class="content-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Visual</button>
+            <!-- RAW Editor Tab -->
+            <button class="content-tab" id="tab-raw" onclick="App.switchEditorTab('raw')">Raw</button>
+          </div>
+
+          <!-- Panes Container -->
+          <div class="pane-content">
           
           <!-- PANE: SPECIAL PRIMARY TAB -->
           <div id="pane-special" style="display: none;">
@@ -325,6 +327,7 @@
             </div>
           </div>
 
+        </div>
         </div>
 
       </section>

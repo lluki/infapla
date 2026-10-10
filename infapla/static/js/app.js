@@ -694,30 +694,34 @@ const App = {
       // Update WYSIWYG
       this.renderWYSIWYG(data.content);
 
-      // Handle Special Folder View Tab
+      // Ensure content tabs are visible for files
+      const contentTabBar = document.getElementById('content-tab-bar');
+      if (contentTabBar) contentTabBar.style.display = 'flex';
+
+      // Handle Special and Mode Tabs
       const isSpecial = ['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].includes(data.type);
       const tabSpecial = document.getElementById('tab-special');
+      const tabWysiwyg = document.getElementById('tab-wysiwyg');
+      const tabRaw = document.getElementById('tab-raw');
       const shoppingActions = document.getElementById('shopping-special-actions');
 
       if (shoppingActions) {
         shoppingActions.style.display = (data.type === 'shopping') ? 'flex' : 'none';
       }
 
+      if (tabWysiwyg) tabWysiwyg.style.display = 'inline-flex';
+      if (tabRaw) tabRaw.style.display = 'inline-flex';
+
       if (isSpecial) {
-        tabSpecial.style.display = 'inline-block';
-        const labels = {
-          shopping: '🛒 Interactive',
-          recipe: '🍲 Interactive',
-          mealplan: '📋 Interactive',
-          todo: '✅ Interactive',
-          calendar: '📅 Interactive'
-        };
-        tabSpecial.textContent = labels[data.type] || '✨ Interactive';
+        if (tabSpecial) {
+          tabSpecial.style.display = 'inline-flex';
+          tabSpecial.textContent = 'Interactive';
+        }
         // Default to interactive mode for special files (shopping list, tasks, calendar, recipes, mealplan)
         this.switchEditorTab('special');
         this.renderSpecialView(data.type, path, data.content);
       } else {
-        tabSpecial.style.display = 'none';
+        if (tabSpecial) tabSpecial.style.display = 'none';
         this.switchEditorTab('wysiwyg');
       }
 
@@ -737,20 +741,20 @@ const App = {
     const paneWysiwyg = document.getElementById('pane-wysiwyg');
     const paneRaw = document.getElementById('pane-raw');
 
-    [tabSpecial, tabWysiwyg, tabRaw].forEach(t => t.classList.remove('active'));
-    [paneSpecial, paneWysiwyg, paneRaw].forEach(p => p.style.display = 'none');
+    [tabSpecial, tabWysiwyg, tabRaw].forEach(t => { if (t) t.classList.remove('active'); });
+    [paneSpecial, paneWysiwyg, paneRaw].forEach(p => { if (p) p.style.display = 'none'; });
 
     if (tabName === 'special') {
-      tabSpecial.classList.add('active');
-      paneSpecial.style.display = 'block';
+      if (tabSpecial) tabSpecial.classList.add('active');
+      if (paneSpecial) paneSpecial.style.display = 'block';
     } else if (tabName === 'raw') {
-      tabRaw.classList.add('active');
-      paneRaw.style.display = 'flex';
+      if (tabRaw) tabRaw.classList.add('active');
+      if (paneRaw) paneRaw.style.display = 'flex';
       const rawTextarea = document.getElementById('raw-editor-text');
       if (rawTextarea) rawTextarea.value = this.state.currentFileContent;
     } else {
-      tabWysiwyg.classList.add('active');
-      paneWysiwyg.style.display = 'flex';
+      if (tabWysiwyg) tabWysiwyg.classList.add('active');
+      if (paneWysiwyg) paneWysiwyg.style.display = 'flex';
       this.renderWYSIWYG(this.state.currentFileContent);
     }
   },
@@ -1352,6 +1356,7 @@ const App = {
       });
       const data = await res.json();
       if (data.success) {
+        this.state.currentFileContent = content;
         this.showToast('File saved successfully', 'success');
         this.checkGitStatus();
         this.loadDashboardData();
@@ -1418,14 +1423,9 @@ const App = {
     const ctxBadge = document.getElementById('file-chat-context-badge');
     if (ctxBadge) ctxBadge.textContent = `Folder: ${folderPath}/`;
 
-    // Setup tabs for folder view: only Special (Folder) tab active
-    const tabSpecial = document.getElementById('tab-special');
-    const tabWysiwyg = document.getElementById('tab-wysiwyg');
-    const tabRaw = document.getElementById('tab-raw');
-    tabSpecial.style.display = 'inline-block';
-    tabSpecial.textContent = '📁 Folder View';
-    tabWysiwyg.style.display = 'none';
-    tabRaw.style.display = 'none';
+    // In folder view, hide tabs since folder view only displays directory contents
+    const contentTabBar = document.getElementById('content-tab-bar');
+    if (contentTabBar) contentTabBar.style.display = 'none';
 
     this.switchEditorTab('special');
     this.renderSpecialView('folder', folderPath, '');
