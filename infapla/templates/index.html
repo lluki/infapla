@@ -170,8 +170,28 @@
             <button class="action-pill-btn" onclick="App.sendOverviewPrompt('Suggest a quick 20-minute dinner recipe using our pantry items.')">💡 Quick dinner idea</button>
           </div>
 
+          <!-- Voice recording live status bar -->
+          <div id="overview-recording-bar" class="recording-bar" style="display: none;">
+            <div class="recording-pulse"></div>
+            <span id="overview-recording-timer">0:00</span>
+            <span class="recording-hint">Recording... Release or tap Stop to send</span>
+            <button type="button" class="recording-cancel-btn" onclick="App.cancelVoiceRecording('overview')" title="Cancel">✕</button>
+            <button type="button" class="recording-stop-btn" onclick="App.stopVoiceRecording('overview')" title="Send">Stop & Send</button>
+          </div>
+
           <form class="ai-input-form" onsubmit="App.handleOverviewChatSubmit(event)">
-            <input type="text" id="overview-chat-input" class="ai-input-field" placeholder="Ask anything about shopping, recipes, calendar, or tasks..." autocomplete="off">
+            <!-- Hidden file inputs for attachments and camera -->
+            <input type="file" id="overview-file-input" style="display: none;" accept="image/*,.pdf,.txt,.ics,.md,.csv" onchange="App.handleFileUploadChange(event, 'overview')">
+            
+            <button type="button" class="chat-attach-btn" id="overview-attach-btn" onclick="document.getElementById('overview-file-input').click()" title="Attach file or photo" aria-label="Attach file or photo">
+              <span>📎</span>
+            </button>
+
+            <button type="button" class="chat-voice-btn" id="overview-voice-btn" title="Hold or click to record voice" aria-label="Record voice note">
+              <span>🎙️</span>
+            </button>
+
+            <input type="text" id="overview-chat-input" class="ai-input-field" placeholder="Ask anything, or record voice / attach photo..." autocomplete="off">
             <button type="submit" class="primary-btn" id="overview-chat-send-btn">Send</button>
           </form>
         </div>

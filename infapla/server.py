@@ -1,8 +1,10 @@
 import os
 import json
+import time
 import logging
 from pathlib import Path
 from typing import Optional
+from werkzeug.utils import secure_filename
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory
 
 from .config import Config, default_config
@@ -402,6 +404,92 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
                 file_content=file_content
             )
             return jsonify(result)
+
+    @app.route("/api/chat/upload", methods=["POST"])
+    def chat_upload():
+        upload_type = request.form.get("type", "file").strip().lower() # 'voice' or 'image' or 'file'
+        user_note = request.form.get("prompt", "").strip()
+        stream_mode = request.form.get("stream", "true").lower() in ("true", "1", "yes")
+
+        if "file" not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+
+        uploaded_file = request.files["file"]
+        if not uploaded_file.filename:
+            return jsonify({"error": "Empty filename"}), 400
+
+        orig_filename = secure_filename(uploaded_file.filename) or "upload"
+        ext = Path(orig_filename).suffix.lower()
+        timestamp = int(time.time() * 1000)
+
+        # Classify and determine appropriate directory and filename
+        if upload_type == "voice" or ext in (".ogg", ".webm", ".mp3", ".wav", ".m4a", ".aac"):
+            target_ext = ext or ".webm"
+            temp_filename = f"voice_web_{timestamp}{target_ext}"
+            temp_path = storage.data_dir / temp_filename
+            prompt = (
+                f"A family member sent a voice recording saved at '{temp_filename}'. "
+                f"{'User note: ' + user_note if user_note else ''}\n"
+                "Please listen to and transcribe this audio recording using your file inspection tools. "
+                "Then, fulfill their request (such as updating the shopping list, updating or adding todos, "
+                "adding events to the calendar, saving a recipe, or answering their question). "
+                f"After processing, delete the temporary audio file '{temp_filename}'. "
+                "Respond with a clear, helpful confirmation of what you understood and did."
+            )
+        elif upload_type == "image" or ext in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic"):
+            target_ext = ext or ".jpg"
+            temp_filename = f"image_web_{timestamp}{target_ext}"
+            temp_path = storage.data_dir / temp_filename
+            prompt = (
+                f"A family member uploaded an image/photo saved at '{temp_filename}'. "
+                f"{'User note: ' + user_note if user_note else ''}\n"
+                "Please inspect this image using your file inspection tools. "
+                "If it is an invitation or event flyer, extract the event details (Title/Summary, Date, Time, Location, Description) and create/update the calendar events. "
+                "If it is a receipt or handwritten shopping list, update the shopping list. "
+                "If it is a recipe, format and add it under recipes. "
+                "Otherwise, answer the user's note based on the image content. "
+                f"After processing, delete the temporary image file '{temp_filename}'. "
+                "Respond with a clear, helpful summary of the actions taken."
+            )
+        else:
+            temp_filename = f"upload_web_{timestamp}_{orig_filename}"
+            temp_path = storage.data_dir / temp_filename
+            prompt = (
+                f"A family member uploaded a file saved at '{temp_filename}'. "
+                f"{'User note: ' + user_note if user_note else ''}\n"
+                "Please inspect this file and fulfill the user request accordingly. "
+                f"After processing, delete the temporary file '{temp_filename}' unless the user specifically asked to keep it. "
+                "Respond with a clear, helpful answer."
+            )
+
+        try:
+            uploaded_file.save(str(temp_path))
+        except Exception as e:
+            return jsonify({"error": f"Failed to save uploaded file: {e}"}), 500
+
+        if stream_mode:
+            def generate():
+                try:
+                    for event in sandbox.execute_prompt_stream(prompt=prompt):
+                        yield f"data: {json.dumps(event)}\n\n"
+                finally:
+                    # Clean up temporary file if still exists
+                    if temp_path.exists():
+                        try:
+                            temp_path.unlink()
+                        except Exception:
+                            pass
+            return Response(stream_with_context(generate()), mimetype="text/event-stream")
+        else:
+            try:
+                result = sandbox.execute_prompt(prompt=prompt)
+                return jsonify(result)
+            finally:
+                if temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except Exception:
+                        pass
 
     @app.route("/api/chat/action", methods=["POST"])
     def chat_action():

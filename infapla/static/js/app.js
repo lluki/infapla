@@ -161,6 +161,9 @@ const App = {
       });
     }
 
+    // Bind Overview Chat Voice Recording Button (Click or Hold)
+    this.initVoiceRecordingButton('overview');
+
     // Handle browser back/forward navigation
     window.addEventListener('popstate', (e) => {
       this.handleRouteFromUrl(false);
@@ -2314,7 +2317,189 @@ const App = {
   },
 
 
-  // ===== AI Chat Handlers =====
+  // ===== AI Chat Handlers & Voice / File Attachments =====
+  _voiceMediaRecorders: {},
+  _voiceRecordedChunks: {},
+  _voiceTimers: {},
+  _voiceStartTimes: {},
+
+  initVoiceRecordingButton(context = 'overview') {
+    const btn = document.getElementById(`${context}-voice-btn`);
+    if (!btn) return;
+
+    let holdTimer = null;
+    let didHold = false;
+
+    // Start recording on pointer/mouse down or touch start
+    const handleStart = (e) => {
+      // If already recording, tap will stop and send
+      if (btn.classList.contains('recording')) {
+        return;
+      }
+      didHold = false;
+      holdTimer = setTimeout(async () => {
+        didHold = true;
+        await this.startVoiceRecording(context);
+      }, 250);
+    };
+
+    // End recording on pointer/mouse up or touch end
+    const handleEnd = async (e) => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      if (didHold && btn.classList.contains('recording')) {
+        e.preventDefault();
+        await this.stopVoiceRecording(context);
+      }
+    };
+
+    // Toggle on simple click if hold didn't trigger
+    btn.addEventListener('click', async (e) => {
+      if (didHold) {
+        didHold = false;
+        return;
+      }
+      if (btn.classList.contains('recording')) {
+        await this.stopVoiceRecording(context);
+      } else {
+        await this.startVoiceRecording(context);
+      }
+    });
+
+    btn.addEventListener('pointerdown', handleStart);
+    btn.addEventListener('pointerup', handleEnd);
+    btn.addEventListener('pointercancel', () => {
+      if (holdTimer) clearTimeout(holdTimer);
+    });
+  },
+
+  async startVoiceRecording(context = 'overview') {
+    const btn = document.getElementById(`${context}-voice-btn`);
+    const bar = document.getElementById(`${context}-recording-bar`);
+    const timerEl = document.getElementById(`${context}-recording-timer`);
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        this.showToast('Microphone access is not supported on this browser/connection.', 'info');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      }
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      this._voiceMediaRecorders[context] = recorder;
+      this._voiceRecordedChunks[context] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          this._voiceRecordedChunks[context].push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // Stop audio tracks
+        stream.getTracks().forEach(track => track.stop());
+
+        // Only send if not cancelled
+        if (this._voiceMediaRecorders[context] !== null) {
+          const rawMime = recorder.mimeType || 'audio/webm';
+          const ext = rawMime.includes('mp4') ? '.m4a' : (rawMime.includes('ogg') ? '.ogg' : '.webm');
+          const blob = new Blob(this._voiceRecordedChunks[context], { type: rawMime });
+          
+          if (blob.size > 500) {
+            const file = new File([blob], `voice_note${ext}`, { type: rawMime });
+            const inputField = document.getElementById(`${context}-chat-input`);
+            const promptNote = inputField ? inputField.value.trim() : '';
+            if (inputField) inputField.value = '';
+            await this.sendChatUpload(file, 'voice', promptNote, `${context}-chat-messages`);
+          }
+        }
+        delete this._voiceMediaRecorders[context];
+        delete this._voiceRecordedChunks[context];
+      };
+
+      recorder.start(250); // slice every 250ms
+      if (btn) btn.classList.add('recording');
+      if (bar) bar.style.display = 'flex';
+
+      // Start duration timer
+      this._voiceStartTimes[context] = Date.now();
+      if (this._voiceTimers[context]) clearInterval(this._voiceTimers[context]);
+      this._voiceTimers[context] = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - this._voiceStartTimes[context]) / 1000);
+        const mins = Math.floor(elapsed / 60);
+        const secs = elapsed % 60;
+        if (timerEl) timerEl.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      }, 500);
+
+    } catch (err) {
+      console.error('Microphone error:', err);
+      this.showToast('Microphone access was denied or is unavailable.', 'info');
+      this.cancelVoiceRecording(context);
+    }
+  },
+
+  async stopVoiceRecording(context = 'overview') {
+    const btn = document.getElementById(`${context}-voice-btn`);
+    const bar = document.getElementById(`${context}-recording-bar`);
+    if (this._voiceTimers[context]) {
+      clearInterval(this._voiceTimers[context]);
+      delete this._voiceTimers[context];
+    }
+    if (btn) btn.classList.remove('recording');
+    if (bar) bar.style.display = 'none';
+
+    const recorder = this._voiceMediaRecorders[context];
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop();
+      } catch (e) {
+        console.warn('Error stopping recorder:', e);
+      }
+    }
+  },
+
+  cancelVoiceRecording(context = 'overview') {
+    const btn = document.getElementById(`${context}-voice-btn`);
+    const bar = document.getElementById(`${context}-recording-bar`);
+    if (this._voiceTimers[context]) {
+      clearInterval(this._voiceTimers[context]);
+      delete this._voiceTimers[context];
+    }
+    if (btn) btn.classList.remove('recording');
+    if (bar) bar.style.display = 'none';
+
+    const recorder = this._voiceMediaRecorders[context];
+    // Set to null to indicate cancelled
+    this._voiceMediaRecorders[context] = null;
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop();
+      } catch (e) {
+        // ignore
+      }
+    }
+  },
+
+  async handleFileUploadChange(e, context = 'overview') {
+    const input = e.target;
+    if (!input || !input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    const textInput = document.getElementById(`${context}-chat-input`);
+    const promptNote = textInput ? textInput.value.trim() : '';
+    if (textInput) textInput.value = '';
+
+    const uploadType = file.type.startsWith('image/') ? 'image' : 'file';
+    await this.sendChatUpload(file, uploadType, promptNote, `${context}-chat-messages`);
+    input.value = ''; // Reset file input so same file can be picked again
+  },
+
   async handleOverviewChatSubmit(e) {
     e.preventDefault();
     const input = document.getElementById('overview-chat-input');
@@ -2702,6 +2887,172 @@ const App = {
         statusDiv.className = 'message-status';
         statusDiv.style.color = 'var(--danger)';
         statusDiv.innerHTML = `<span>✕</span> <span>Connection error: ${e.message}</span>`;
+      }
+    } finally {
+      if (this.state.aiStatus === 'thinking') {
+        this.state.aiStatus = 'idle';
+        this.updateAiHeaderStatus();
+      }
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+      }
+      container.scrollTop = container.scrollHeight;
+    }
+  },
+
+  async sendChatUpload(file, uploadType, promptNote, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const isOverview = (containerId === 'overview-chat-messages');
+    const sendBtn = document.getElementById(isOverview ? 'overview-chat-send-btn' : 'file-chat-send-btn');
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Uploading...';
+    }
+
+    this.state.aiStatus = 'thinking';
+    this.updateAiHeaderStatus();
+
+    // Render user bubble with preview
+    const userMsg = document.createElement('div');
+    userMsg.className = 'chat-message user';
+    let userBubbleHtml = '';
+    if (uploadType === 'voice') {
+      userBubbleHtml = `<div class="message-bubble"><div>🎙️ <em>Voice message</em></div>${promptNote ? `<div style="font-size: 0.85rem; margin-top: 0.25rem;">${this.escapeHtml(promptNote)}</div>` : ''}</div>`;
+    } else if (uploadType === 'image') {
+      const objUrl = URL.createObjectURL(file);
+      userBubbleHtml = `
+        <div class="message-bubble">
+          <div style="margin-bottom: 0.35rem;"><img src="${objUrl}" style="max-width: 180px; max-height: 180px; border-radius: 6px; display: block; object-fit: cover;"></div>
+          ${promptNote ? `<div style="font-size: 0.85rem;">${this.escapeHtml(promptNote)}</div>` : `<div style="font-size: 0.75rem; color: var(--text-muted);">📷 ${this.escapeHtml(file.name)}</div>`}
+        </div>
+      `;
+    } else {
+      userBubbleHtml = `<div class="message-bubble"><div>📎 <strong>${this.escapeHtml(file.name)}</strong></div>${promptNote ? `<div style="font-size: 0.85rem; margin-top: 0.25rem;">${this.escapeHtml(promptNote)}</div>` : ''}</div>`;
+    }
+    userMsg.innerHTML = userBubbleHtml;
+    container.appendChild(userMsg);
+
+    // Assistant placeholder
+    const assistantMsg = document.createElement('div');
+    assistantMsg.className = 'chat-message assistant';
+    assistantMsg.innerHTML = `
+      <div class="message-bubble">
+        <div class="message-text"><em>Processing ${uploadType === 'voice' ? 'voice message' : 'uploaded file'}...</em></div>
+        <div class="message-status running"><span>⏳</span> <span>AI agent is inspecting and processing...</span></div>
+      </div>
+    `;
+    container.appendChild(assistantMsg);
+    container.scrollTop = container.scrollHeight;
+
+    const textDiv = assistantMsg.querySelector('.message-text');
+    const statusDiv = assistantMsg.querySelector('.message-status');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', uploadType);
+      if (promptNote) formData.append('prompt', promptNote);
+      formData.append('stream', 'true');
+
+      const response = await fetch('/api/chat/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `Upload failed (status ${response.status})`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let responseText = '';
+      textDiv.textContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const eventData = JSON.parse(line.substring(6));
+              if (eventData.type === 'chunk') {
+                responseText += eventData.text;
+                textDiv.innerHTML = this.parseMarkdownToHTML(responseText);
+                container.scrollTop = container.scrollHeight;
+              } else if (eventData.type === 'done') {
+                const modFiles = eventData.files_modified || [];
+                if (statusDiv) {
+                  statusDiv.className = 'message-status done';
+                  if (modFiles.length > 0) {
+                    statusDiv.innerHTML = `<span>✓</span> <span>Done • Updated ${modFiles.join(', ')}</span>`;
+                  } else {
+                    statusDiv.innerHTML = `<span>✓</span> <span>Done</span>`;
+                  }
+                }
+
+                if (modFiles.length > 0) {
+                  modFiles.forEach(f => {
+                    const parts = f.split('/');
+                    for (let i = 1; i < parts.length; i++) {
+                      this.state.expandedFolders.add(parts.slice(0, i).join('/'));
+                    }
+                  });
+                  this.showToast(`AI agent updated: ${modFiles.join(', ')}`, 'success');
+                  if (this.state.currentFilePath && modFiles.includes(this.state.currentFilePath)) {
+                    await this.syncCurrentFileContent();
+                    if (['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].includes(this.state.currentFileType)) {
+                      this.renderSpecialView(this.state.currentFileType, this.state.currentFilePath, this.state.currentFileContent);
+                    }
+                  }
+                }
+
+                this.state.aiStatus = 'done';
+                this.updateAiHeaderStatus();
+
+                await this.loadFiles();
+                this.loadDashboardData();
+                this.loadRecentChanges();
+                this.checkGitStatus();
+              } else if (eventData.type === 'error') {
+                this.state.aiStatus = 'idle';
+                this.updateAiHeaderStatus();
+                if (statusDiv) {
+                  statusDiv.className = 'message-status';
+                  statusDiv.style.color = 'var(--danger)';
+                  statusDiv.innerHTML = `<span>✕</span> <span>Error: ${eventData.error}</span>`;
+                }
+              }
+            } catch (err) {
+              // Ignore non-json
+            }
+          }
+        }
+      }
+
+      if (!responseText && statusDiv && statusDiv.className.includes('running')) {
+        statusDiv.className = 'message-status done';
+        statusDiv.innerHTML = `<span>✓</span> <span>Done</span>`;
+      }
+
+      if (this.state.aiStatus === 'thinking') {
+        this.state.aiStatus = 'done';
+        this.updateAiHeaderStatus();
+      }
+
+    } catch (e) {
+      this.state.aiStatus = 'idle';
+      this.updateAiHeaderStatus();
+      if (statusDiv) {
+        statusDiv.className = 'message-status';
+        statusDiv.style.color = 'var(--danger)';
+        statusDiv.innerHTML = `<span>✕</span> <span>Error: ${e.message}</span>`;
       }
     } finally {
       if (this.state.aiStatus === 'thinking') {

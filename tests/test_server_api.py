@@ -269,5 +269,25 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(res_sync.status_code, 200)
         self.assertTrue(res_sync.get_json()["success"])
 
+    def test_chat_upload(self):
+        import io
+        # Test missing file
+        res_no_file = self.client.post("/api/chat/upload", data={})
+        self.assertEqual(res_no_file.status_code, 400)
+
+        # Test upload endpoint accepting audio voice note
+        dummy_audio = io.BytesIO(b"fake audio bytes")
+        res_upload = self.client.post(
+            "/api/chat/upload",
+            data={
+                "file": (dummy_audio, "voice_test.webm"),
+                "type": "voice",
+                "prompt": "Add milk",
+                "stream": "false"
+            },
+            content_type="multipart/form-data"
+        )
+        self.assertEqual(res_upload.status_code, 200)
+
 if __name__ == "__main__":
     unittest.main()
