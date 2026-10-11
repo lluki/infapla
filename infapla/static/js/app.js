@@ -49,14 +49,59 @@ const App = {
       this.loadRecentChanges();
     });
 
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-        this.loadFiles();
-        this.checkGitStatus();
-        this.loadDashboardData();
-        this.loadRecentChanges();
+    // Synchronize visual viewport (for mobile virtual keyboards)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        this.updateVisualViewport();
+        this.scrollActiveChatToBottom();
+      });
+      window.visualViewport.addEventListener('scroll', () => {
+        this.updateVisualViewport();
+      });
+    } else {
+      window.addEventListener('resize', () => this.updateVisualViewport());
+    }
+    this.updateVisualViewport();
+  },
+
+  updateVisualViewport() {
+    if (window.visualViewport) {
+      const vh = window.visualViewport.height;
+      const vt = window.visualViewport.offsetTop;
+      document.documentElement.style.setProperty('--vvh', `${vh}px`);
+      document.documentElement.style.setProperty('--vvt', `${vt}px`);
+    } else {
+      document.documentElement.style.setProperty('--vvh', `${window.innerHeight}px`);
+      document.documentElement.style.setProperty('--vvt', '0px');
+    }
+  },
+
+  scrollActiveChatToBottom() {
+    const modal = document.getElementById('file-assistant-modal');
+    if (modal && modal.style.display !== 'none') {
+      const list = document.getElementById('file-chat-messages');
+      if (list) list.scrollTop = list.scrollHeight;
+    }
+  },
+
+  setModalOpen(isOpen) {
+    if (isOpen) {
+      if (!this._openModalsCount) {
+        this._savedScrollY = window.scrollY || window.pageYOffset || 0;
+        document.body.style.top = `-${this._savedScrollY}px`;
+        document.body.classList.add('modal-open');
       }
-    });
+      this._openModalsCount = (this._openModalsCount || 0) + 1;
+      this.updateVisualViewport();
+    } else {
+      this._openModalsCount = Math.max(0, (this._openModalsCount || 1) - 1);
+      if (this._openModalsCount === 0) {
+        const savedY = this._savedScrollY || 0;
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        window.scrollTo(0, savedY);
+      }
+    }
   },
 
   bindEvents() {
@@ -633,6 +678,7 @@ const App = {
 
     content.innerHTML = '<div style="padding: 2.5rem; text-align: center; color: var(--text-muted);">Fetching file diff...</div>';
     modal.style.display = 'flex';
+    this.setModalOpen(true);
 
     try {
       let url = '/api/git/diff?';
@@ -694,8 +740,9 @@ const App = {
 
   closeDiffModal() {
     const modal = document.getElementById('diff-modal');
-    if (modal) {
+    if (modal && modal.style.display !== 'none') {
       modal.style.display = 'none';
+      this.setModalOpen(false);
     }
     this.state.currentDiffHash = null;
     this.state.currentDiffRaw = '';
@@ -1284,11 +1331,19 @@ const App = {
     const modal = document.getElementById('ingredient-picker-modal');
     if (!modal) return;
     modal.style.display = 'flex';
+    this.setModalOpen(true);
 
     const input = document.getElementById('ingredient-picker-input');
     if (input) {
       input.value = '';
-      setTimeout(() => input.focus(), 30);
+      setTimeout(() => {
+        try {
+          input.focus({ preventScroll: true });
+        } catch (e) {
+          input.focus();
+        }
+        this.updateVisualViewport();
+      }, 30);
     }
 
     if (!this.state.ingredientSuggestions) {
@@ -1299,8 +1354,9 @@ const App = {
 
   closeIngredientPickerModal() {
     const modal = document.getElementById('ingredient-picker-modal');
-    if (modal) {
+    if (modal && modal.style.display !== 'none') {
       modal.style.display = 'none';
+      this.setModalOpen(false);
     }
     const input = document.getElementById('ingredient-picker-input');
     if (input) input.value = '';
@@ -1852,12 +1908,18 @@ const App = {
 
   showAddEventModal() {
     const modal = document.getElementById('event-modal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      this.setModalOpen(true);
+    }
   },
 
   closeAddEventModal() {
     const modal = document.getElementById('event-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal && modal.style.display !== 'none') {
+      modal.style.display = 'none';
+      this.setModalOpen(false);
+    }
   },
 
   async submitAddEvent() {
@@ -2252,13 +2314,23 @@ const App = {
     const modal = document.getElementById('file-assistant-modal');
     if (!modal) return;
     modal.style.display = 'flex';
+    this.setModalOpen(true);
+
     const ctxBadge = document.getElementById('file-chat-context-badge');
     if (ctxBadge && this.state.currentFilePath) {
       ctxBadge.textContent = `Context: ${this.state.currentFilePath}`;
     }
     const input = document.getElementById('file-chat-input');
     if (input) {
-      setTimeout(() => input.focus(), 50);
+      setTimeout(() => {
+        try {
+          input.focus({ preventScroll: true });
+        } catch (e) {
+          input.focus();
+        }
+        this.updateVisualViewport();
+        this.scrollActiveChatToBottom();
+      }, 50);
     }
     // If opening the modal after completion, clear the done status
     if (this.state.aiStatus === 'done') {
@@ -2269,7 +2341,10 @@ const App = {
 
   closeFileAssistantModal() {
     const modal = document.getElementById('file-assistant-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal && modal.style.display !== 'none') {
+      modal.style.display = 'none';
+      this.setModalOpen(false);
+    }
     this.updateAiHeaderStatus();
   },
 

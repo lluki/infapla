@@ -59,9 +59,13 @@ InFaPla/
   - Relative markdown links (such as `- [Palak Paneer](../recipes/palak-paneer.md)` from mealplans like `shopping/mealplan/2026-10-12.md` or general markdown docs) resolve cleanly relative to the active file's parent folder using path segment stack resolution.
   - Links to subdirectories or extensionless folder paths properly trigger folder view (`App.openFolder`) vs file view (`App.openFile`).
 - **Decluttered File View & Mobile Full-Screen Modals**:
-  - Removed embedded assistant card and mode tabs from the file view layout, maximizing editor screen real estate.
-  - On mobile screens (`@media (max-width: 640px)`), all modal dialogs (Ingredient Picker, File AI Assistant, Calendar Add Event, Diff Viewer) expand to full-screen views (`100vw x 100dvh`) with native sheet feel and scrollable dialog bodies.
-- **Topmost Bar AI Status Indicator**:
+  - On mobile screens (`@media (max-width: 640px)`), all modal dialogs (Ingredient Picker, File AI Assistant, Calendar Add Event, Diff Viewer) expand to full-screen views with native sheet feel.
+  - **Mobile Virtual Keyboard & Visual Viewport Synchronization**:
+    - Integrated `<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">`.
+    - Dynamic CSS `--vvh` and `--vvt` variables driven by `window.visualViewport` listeners to adapt modal height immediately when software keyboard opens or scrolls.
+    - Prevented background document scrolling via `body.modal-open` scroll locking and `focus({ preventScroll: true })`.
+    - Modal body uses flexbox with internal scrollable messages list (`min-height: 0; flex: 1 1 auto; overflow-y: auto`) and pinned inputs (`flex-shrink: 0`), preventing the dialog header from being pushed off-screen.
+    - Minimum 16px font-size on mobile inputs to avoid automatic iOS browser zooming.
   - When closing the AI modal dialog while the assistant is running/thinking, an animated spinner appears in the topmost navigation header.
   - Upon AI turn completion, the spinner smoothly clicks into an animated green checkmark (`✓`).
   - Clicking the indicator button in either state (spinner or green checkmark) immediately re-opens the modal AI dialog.

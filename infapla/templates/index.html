@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
   <title>InFaPla - Intelligent Family Planner</title>
   <link rel="stylesheet" href="static/css/app.css">
   <link rel="stylesheet" href="static/css/diff2html.min.css">
@@ -374,7 +374,7 @@
   </div>
 
   <!-- Modal: Add Calendar Event -->
-  <div id="event-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center;">
+  <div id="event-modal" class="app-modal-overlay" style="display: none;">
     <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem; width: 90%; max-width: 450px; display: flex; flex-direction: column; gap: 1rem;">
       <h3 style="font-size: 1.2rem;">Add Calendar Event</h3>
       <div>
@@ -401,7 +401,7 @@
   </div>
 
   <!-- Modal: Git Diff Viewer -->
-  <div id="diff-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 110; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+  <div id="diff-modal" class="app-modal-overlay" style="display: none;">
     <div class="diff-modal-dialog">
       <div class="diff-modal-header">
         <div style="display: flex; align-items: center; gap: 0.75rem; overflow: hidden;">
@@ -426,7 +426,7 @@
   </div>
 
   <!-- Modal: File AI Assistant -->
-  <div id="file-assistant-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 120; align-items: center; justify-content: center; backdrop-filter: blur(4px);" onclick="if(event.target===this) App.closeFileAssistantModal()">
+  <div id="file-assistant-modal" class="app-modal-overlay" style="display: none;" onclick="if(event.target===this) App.closeFileAssistantModal()">
     <div class="assistant-modal-dialog">
       <div class="assistant-modal-header">
         <div style="display: flex; align-items: center; gap: 0.6rem;">
@@ -440,7 +440,7 @@
       </div>
 
       <div class="assistant-modal-body">
-        <div class="ai-messages-list" id="file-chat-messages" style="max-height: 350px; min-height: 140px; overflow-y: auto;">
+        <div class="ai-messages-list" id="file-chat-messages">
           <div class="chat-message assistant">
             <div class="message-bubble">
               Ask me to edit, reorganize, or answer questions about this file. Any changes I make will automatically update your editor!

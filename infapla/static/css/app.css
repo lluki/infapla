@@ -1,4 +1,6 @@
 :root {
+  --vvh: 100vh;
+  --vvt: 0px;
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-tertiary: #334155;
@@ -36,6 +38,14 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+}
+
+body.modal-open {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+  left: 0 !important;
 }
 
 /* App Header */
@@ -1611,7 +1621,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.assistant-modal-dialog .ai-messages-list {
+  max-height: 420px;
+  min-height: 160px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 /* Toast notifications */
@@ -1962,16 +1983,31 @@ body {
     justify-content: center;
   }
 
-  /* Mobile: Full-Screen Modals */
+  /* Mobile: Full-Screen Modals with Virtual Keyboard Adaptation */
   .app-modal-overlay,
   #event-modal,
   #diff-modal,
-  #file-assistant-modal {
+  #file-assistant-modal,
+  #ingredient-picker-modal {
     padding: 0 !important;
-    inset: 0 !important;
-    display: flex;
+    position: fixed !important;
+    top: var(--vvt, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: auto !important;
+    width: 100% !important;
+    width: 100vw !important;
+    height: var(--vvh, 100%) !important;
+    height: var(--vvh, 100dvh) !important;
+    max-height: var(--vvh, 100%) !important;
+    max-height: var(--vvh, 100dvh) !important;
+    display: flex !important;
+    flex-direction: column !important;
     align-items: stretch !important;
     justify-content: stretch !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    z-index: 150 !important;
   }
 
   .assistant-modal-dialog,
@@ -1981,47 +2017,101 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     height: 100% !important;
-    height: 100dvh !important;
-    max-height: 100vh !important;
-    max-height: 100dvh !important;
+    max-height: 100% !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
     display: flex !important;
     flex-direction: column !important;
+    overflow: hidden !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .assistant-modal-header,
   .ingredient-picker-header,
   .diff-modal-header {
     border-radius: 0 !important;
-    padding: 1rem 1.25rem !important;
+    padding: 0.85rem 1.1rem !important;
+    flex-shrink: 0 !important;
   }
 
-  .assistant-modal-body,
-  .ingredient-picker-body,
-  .diff-modal-body {
-    flex: 1 !important;
-    overflow-y: auto !important;
-    max-height: none !important;
-    padding: 1rem 1.25rem !important;
+  .assistant-modal-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    padding: 0.85rem 1.1rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    gap: 0.5rem !important;
+    box-sizing: border-box !important;
   }
 
   .assistant-modal-dialog .ai-messages-list {
     max-height: none !important;
-    flex: 1 !important;
-    min-height: 250px !important;
-  }
-
-  .ingredient-picker-dialog .ingredient-suggestions-scroll {
-    max-height: none !important;
-    flex: 1 !important;
-    min-height: 250px !important;
-  }
-
-  #event-modal > div {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
     overflow-y: auto !important;
-    padding: 1.25rem !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: 0.25rem;
+  }
+
+  .assistant-modal-dialog .ai-actions-row {
+    flex-shrink: 0 !important;
+    margin-bottom: 0.25rem;
+  }
+
+  .assistant-modal-dialog .ai-input-form {
+    flex-shrink: 0 !important;
+    margin-top: auto;
+  }
+
+  .ingredient-picker-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0.85rem 1.1rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .ingredient-picker-input-wrap {
+    flex-shrink: 0 !important;
+  }
+
+  .ingredient-suggestions-header {
+    flex-shrink: 0 !important;
+  }
+
+  .ingredient-picker-dialog .ingredient-suggestions-container {
+    max-height: none !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .diff-modal-body,
+  #event-modal > div {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    padding: 1rem 1.25rem !important;
+  }
+
+  /* Prevent automatic mobile input zooming */
+  .ai-input-field,
+  .list-input,
+  .ingredient-search-input,
+  input[type="text"],
+  input[type="datetime-local"] {
+    font-size: 16px !important;
+  }
   }
 }
 
