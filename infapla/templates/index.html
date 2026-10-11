@@ -22,21 +22,104 @@
       </div>
     </div>
 
-    <nav class="header-nav">
-      <button class="nav-btn active" id="nav-overview" onclick="App.showOverview()">
-        <span>🏠</span><span class="nav-text">Overview</span>
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <nav class="header-nav">
+        <button class="nav-btn active" id="nav-overview" onclick="App.showOverview()">
+          <span>🏠</span><span class="nav-text">Overview</span>
+        </button>
+        <button class="nav-btn" onclick="App.openFile('shopping/list.md')">
+          <span>🛒</span><span class="nav-text">Shopping</span>
+        </button>
+        <button class="nav-btn" onclick="App.openFile('todo/list.md')">
+          <span>✅</span><span class="nav-text">Tasks</span>
+        </button>
+        <button class="nav-btn" onclick="App.openFile('calendar/family.ics')">
+          <span>📅</span><span class="nav-text">Calendar</span>
+        </button>
+      </nav>
+      <button class="burger-btn" id="burger-menu-toggle" onclick="App.toggleBurgerMenu()" aria-label="Open menu" title="Menu">
+        <span>☰</span>
       </button>
-      <button class="nav-btn" onclick="App.openFile('shopping/list.md')">
-        <span>🛒</span><span class="nav-text">Shopping</span>
-      </button>
-      <button class="nav-btn" onclick="App.openFile('todo/list.md')">
-        <span>✅</span><span class="nav-text">Tasks</span>
-      </button>
-      <button class="nav-btn" onclick="App.openFile('calendar/family.ics')">
-        <span>📅</span><span class="nav-text">Calendar</span>
-      </button>
-    </nav>
+    </div>
   </header>
+
+  <!-- Burger Menu Overlay & Drawer -->
+  <div class="burger-overlay" id="burger-overlay" onclick="App.closeBurgerMenu()"></div>
+  <aside class="burger-drawer" id="burger-drawer">
+    <div class="burger-drawer-header">
+      <div class="burger-drawer-title">Menu</div>
+      <button class="burger-close-btn" onclick="App.closeBurgerMenu()" aria-label="Close menu">✕</button>
+    </div>
+    
+    <div class="burger-drawer-body">
+      <!-- 1. Top Item: Open Assistant -->
+      <div class="burger-section">
+        <button class="burger-item burger-assistant-btn" id="burger-open-assistant" onclick="App.handleBurgerOpenAssistant()">
+          <span class="burger-item-icon">🤖</span>
+          <div class="burger-item-info">
+            <span class="burger-item-title">Open Assistant</span>
+            <span class="burger-item-sub" id="burger-assistant-subtitle">Family Assistant</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- 2. Mode Chooser (when on file) -->
+      <div class="burger-section" id="burger-mode-section" style="display: none;">
+        <div class="burger-section-title">View Mode</div>
+        <div class="burger-mode-buttons">
+          <button class="burger-mode-btn" id="burger-mode-special" onclick="App.selectBurgerMode('special')">
+            <span class="mode-icon">⚡</span>
+            <span>Interactive</span>
+          </button>
+          <button class="burger-mode-btn" id="burger-mode-wysiwyg" onclick="App.selectBurgerMode('wysiwyg')">
+            <span class="mode-icon">👁️</span>
+            <span>Visual</span>
+          </button>
+          <button class="burger-mode-btn" id="burger-mode-raw" onclick="App.selectBurgerMode('raw')">
+            <span class="mode-icon">📝</span>
+            <span>Raw</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. File Actions (when on file) -->
+      <div class="burger-section" id="burger-file-section" style="display: none;">
+        <div class="burger-section-title">File Actions</div>
+        <button class="burger-item danger-item" id="burger-delete-file" onclick="App.confirmDeleteCurrentFile()">
+          <span class="burger-item-icon">🗑️</span>
+          <div class="burger-item-info">
+            <span class="burger-item-title">Delete File</span>
+            <span class="burger-item-sub" id="burger-delete-sub">Remove file</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- 4. Navigation -->
+      <div class="burger-section">
+        <div class="burger-section-title">Navigation</div>
+        <button class="burger-item" onclick="App.showOverview(); App.closeBurgerMenu();">
+          <span class="burger-item-icon">🏠</span>
+          <span class="burger-item-title">Overview</span>
+        </button>
+        <button class="burger-item" onclick="App.openFile('shopping/list.md'); App.closeBurgerMenu();">
+          <span class="burger-item-icon">🛒</span>
+          <span class="burger-item-title">Shopping List</span>
+        </button>
+        <button class="burger-item" onclick="App.openFile('todo/list.md'); App.closeBurgerMenu();">
+          <span class="burger-item-icon">✅</span>
+          <span class="burger-item-title">Family Tasks</span>
+        </button>
+        <button class="burger-item" onclick="App.openFile('calendar/family.ics'); App.closeBurgerMenu();">
+          <span class="burger-item-icon">📅</span>
+          <span class="burger-item-title">Calendar Schedule</span>
+        </button>
+        <button class="burger-item" onclick="App.promptNewFile(); App.closeBurgerMenu();">
+          <span class="burger-item-icon">➕</span>
+          <span class="burger-item-title">Create New File...</span>
+        </button>
+      </div>
+    </div>
+  </aside>
 
   <!-- Main Layout -->
   <div class="app-container">
@@ -172,57 +255,14 @@
             <button class="back-to-dash-btn" onclick="App.showOverview()">← Overview</button>
             <span class="editor-file-path" id="editor-current-path">file.md</span>
           </div>
-        </div>
-
-        <!-- Embedded AI Chatbox on File (ON VERY TOP OF EDITOR VIEW) -->
-        <div class="ai-chat-card" id="file-chat-card">
-          <div class="ai-chat-header">
-            <div class="ai-chat-title">
-              <span>🤖</span> InFaPla File Assistant
-            </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span class="chat-context-badge" id="file-chat-context-badge">Context: file.md</span>
-              <button class="action-pill-btn" id="toggle-chat-collapse" onclick="App.toggleFileChatCollapse()" title="Minimize/expand AI assistant">▾</button>
-            </div>
-          </div>
-
-          <div id="file-chat-body">
-            <div class="ai-messages-list" id="file-chat-messages" style="max-height: 200px; min-height: 90px;">
-              <div class="chat-message assistant">
-                <div class="message-bubble">
-                  Ask me to edit, reorganize, or answer questions about this file. Any changes I make will automatically update your editor!
-                </div>
-              </div>
-            </div>
-
-            <!-- Specific Buttons at bottom of prompt for shopping list -->
-            <div class="ai-actions-row" id="shopping-special-actions" style="display: none;">
-              <button class="action-pill-btn" onclick="App.executeSpecialAction('group_categories')">
-                <span>🏷️</span> Group by categories
-              </button>
-              <button class="action-pill-btn" onclick="App.executeSpecialAction('merge_duplicates')">
-                <span>🔄</span> Merge duplicates
-              </button>
-            </div>
-
-            <form class="ai-input-form" onsubmit="App.handleFileChatSubmit(event)">
-              <input type="text" id="file-chat-input" class="ai-input-field" placeholder="Ask AI to modify or inspect this file..." autocomplete="off">
-              <button type="submit" class="primary-btn" id="file-chat-send-btn">Send</button>
-            </form>
+          <div class="editor-toolbar-actions">
+            <span class="current-mode-badge" id="editor-mode-badge" onclick="App.openBurgerMenu()" title="Current view mode">Interactive</span>
+            <button class="action-pill-btn" onclick="App.openBurgerMenu()" title="Open Menu">☰ Menu</button>
           </div>
         </div>
 
-        <!-- Content Window with Mode Tabs -->
+        <!-- Content Window -->
         <div class="editor-content-window">
-          <div class="content-tabs-bar" id="content-tab-bar">
-            <!-- Dynamic Primary Special Tab -->
-            <button class="content-tab" id="tab-special" onclick="App.switchEditorTab('special')">Interactive</button>
-            <!-- Visual / Rendered Tab -->
-            <button class="content-tab active" id="tab-wysiwyg" onclick="App.switchEditorTab('wysiwyg')">Visual</button>
-            <!-- RAW Editor Tab -->
-            <button class="content-tab" id="tab-raw" onclick="App.switchEditorTab('raw')">Raw</button>
-          </div>
-
           <!-- Panes Container -->
           <div class="pane-content">
           
@@ -379,6 +419,47 @@
       </div>
       <div class="diff-modal-body" id="diff-modal-content">
         <div style="padding: 2rem; text-align: center; color: var(--text-muted);">Loading diff...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: File AI Assistant -->
+  <div id="file-assistant-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 120; align-items: center; justify-content: center; backdrop-filter: blur(4px);" onclick="if(event.target===this) App.closeFileAssistantModal()">
+    <div class="assistant-modal-dialog">
+      <div class="assistant-modal-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 1.3rem;">🤖</span>
+          <div>
+            <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary);">InFaPla Assistant</div>
+            <span class="chat-context-badge" id="file-chat-context-badge">Context: file.md</span>
+          </div>
+        </div>
+        <button class="action-pill-btn" onclick="App.closeFileAssistantModal()" style="font-size: 1.1rem; line-height: 1; padding: 0.35rem 0.6rem;">✕</button>
+      </div>
+
+      <div class="assistant-modal-body">
+        <div class="ai-messages-list" id="file-chat-messages" style="max-height: 350px; min-height: 140px; overflow-y: auto;">
+          <div class="chat-message assistant">
+            <div class="message-bubble">
+              Ask me to edit, reorganize, or answer questions about this file. Any changes I make will automatically update your editor!
+            </div>
+          </div>
+        </div>
+
+        <!-- Specific Buttons at bottom of prompt for shopping list -->
+        <div class="ai-actions-row" id="shopping-special-actions" style="display: none;">
+          <button class="action-pill-btn" onclick="App.executeSpecialAction('group_categories')">
+            <span>🏷️</span> Group by categories
+          </button>
+          <button class="action-pill-btn" onclick="App.executeSpecialAction('merge_duplicates')">
+            <span>🔄</span> Merge duplicates
+          </button>
+        </div>
+
+        <form class="ai-input-form" onsubmit="App.handleFileChatSubmit(event)">
+          <input type="text" id="file-chat-input" class="ai-input-field" placeholder="Ask AI to modify or inspect this file..." autocomplete="off">
+          <button type="submit" class="primary-btn" id="file-chat-send-btn">Send</button>
+        </form>
       </div>
     </div>
   </div>

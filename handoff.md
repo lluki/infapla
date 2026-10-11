@@ -1,9 +1,9 @@
 # InFaPla Project Handoff
 
-**Date**: October 10, 2026  
+**Date**: October 11, 2026  
 **Repository**: `InFaPla` (Intelligent Family Planner)  
 **Branch**: `main`  
-**Test Suite**: 35/35 Passing (`python3 -m unittest discover tests`)
+**Test Suite**: 36/36 Passing (`python3 -m unittest discover tests`)
 
 ---
 
@@ -48,25 +48,20 @@ InFaPla/
 
 ## 3. Current State & Recent Features
 
-### A. Decluttered Web UI
-- **Unified Overview**: Removed sidebar clutter; the home view features family summary cards (**Shopping**, **Tasks**, **Calendar**, **Recipes**), followed by:
-  - **Recent Changes**: Displays recent commits with changed file lists and interactive per-file side-by-side raw Git diff modals.
-  - **Uncommitted Changes**: Dynamic banner alerting to uncommitted file changes with a working **Sync** action (`/api/git/sync`).
-  - **Folders Overview**: Clean directory tree with direct links to open any folder in full detail. Auto-expands directories when new files are created.
-- **URL Routing & State Persistence**: Preserves navigation state on page reloads (`?file=<path>` and `?folder=<path>`).
-- **Live FS Synchronization**: Filesystem and Git status are actively polled every 3 seconds, refreshed on window focus, and refreshed instantly whenever the AI agent creates or modifies files. HTTP cache-control headers prevent stale browser responses.
-
-### B. Clean Directory Explorer
-- Dedicated vertical folder view listing subdirectories first, followed by files.
-- Parent directory navigation (`..`) and "+ New File in Folder" inline creation modal.
-- Free of excessive icons or card wrapping for maximum readability.
-
-### C. Content Window Tab System
-- Mode chooser tabs (`Interactive`, `Visual`, and `Raw`) are located directly after the AI chatbox and directly above the editor content.
-- **Interactive**: Active by default on special file types (shopping, tasks, recipes, mealplan, calendar). Auto-saves state on interactive actions (e.g. checking off items). Tolerantly parses non-standard markdown formats.
-- **Visual**: Rendered read-only markdown preview.
-- **Raw**: Plain-text markdown editor with strictly idempotent saving (no markdown syntax stripping) and `Ctrl+S` / `Cmd+S` keyboard shortcuts.
-- Clean labeling: Extraneous tabs are automatically hidden in directory views.
+### A. Decluttered Web UI & Burger Menu
+- **Responsive Burger Menu Drawer**:
+  - Accessible via header button `☰` and editor toolbar `☰ Menu`.
+  - **🤖 Open Assistant**: Top item. Opens the overview assistant or a dedicated modal assistant when viewing a file.
+  - **View Mode Chooser**: "Interactive", "Visual", and "Raw" moved out of the editor content window into the burger menu. Opening a file automatically chooses Interactive if available (shopping, recipe, meal plan, todo, calendar), otherwise Visual.
+  - **🗑️ Delete File**: Dedicated file removal action in the burger menu asking for confirmation before deleting via `/api/file/delete`.
+  - **Navigation Shortcuts**: Quick jumps to Overview, Shopping List, Tasks, Calendar, and New File creation.
+- **Decluttered File View**: Removed the embedded top assistant card and mode tabs from the file view layout, maximizing editor screen real estate.
+- **Enhanced Toast Notifications**:
+  - Strictly single active notification (clears existing toast before displaying the next).
+  - Prominent sizing with comfortable padding, and full-width layout on mobile screens (`@media (max-width: 600px)`).
+  - Clicking a recipe ingredient presents "Added to shopping list" with working **Go to list** and **Undo** buttons.
+- **Unified Overview**: Overview features family summary cards (**Shopping**, **Tasks**, **Calendar**, **Recipes**), followed by Recent Changes (commits and per-file diffs) and Folders Overview.
+- **Live FS Synchronization**: Filesystem and Git status are actively polled every 3 seconds and refreshed on window focus or AI completion.
 
 ### D. Special Interactive Modes
 - **Shopping List (`shopping/list.md`)**:
@@ -93,7 +88,7 @@ Visit `http://localhost:8080` in your browser.
 ```bash
 python3 -m unittest discover tests
 ```
-*Current status: 35 tests passing.*
+*Current status: 36 tests passing.*
 
 ### Start with Telegram Bot (Optional)
 ```bash

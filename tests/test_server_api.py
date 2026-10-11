@@ -50,6 +50,21 @@ class TestServerAPI(unittest.TestCase):
         res3 = self.client.get("/api/file?path=shopping/list.md")
         self.assertIn("Updated Shopping List", res3.get_json()["content"])
 
+    def test_file_delete(self):
+        # Create a file to delete
+        self.client.post("/api/file/create", json={"path": "notes/temp.md", "content": "# Temp"})
+        res_get = self.client.get("/api/file?path=notes/temp.md")
+        self.assertEqual(res_get.status_code, 200)
+
+        # Delete it
+        res_del = self.client.post("/api/file/delete", json={"path": "notes/temp.md"})
+        self.assertEqual(res_del.status_code, 200)
+        self.assertTrue(res_del.get_json()["success"])
+
+        # Verify it's gone
+        res_after = self.client.get("/api/file?path=notes/temp.md")
+        self.assertEqual(res_after.status_code, 404)
+
     def test_shopping_api(self):
         # GET shopping
         res = self.client.get("/api/shopping")

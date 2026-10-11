@@ -57,10 +57,13 @@ const App = {
   },
 
   bindEvents() {
-    // Diff modal click outside or ESC to close
+    // ESC to close modals and drawer
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.closeDiffModal();
+        this.closeBurgerMenu();
+        this.closeFileAssistantModal();
+        this.closeAddEventModal();
       }
     });
 
@@ -112,17 +115,80 @@ const App = {
   },
 
 
-  showToast(message, type = 'info') {
+  showToast(message, type = 'info', actions = []) {
     const container = document.getElementById('toast-container');
     if (!container) return;
+
+    // Ensure only one notification is active: clear existing timeout and elements
+    if (this._toastTimeout) {
+      clearTimeout(this._toastTimeout);
+      this._toastTimeout = null;
+    }
+    container.innerHTML = '';
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `<span>${type === 'success' ? '✓' : 'ℹ'}</span> <span>${message}</span>`;
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'toast-content';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'toast-icon';
+    iconSpan.textContent = type === 'success' ? '✓' : 'ℹ';
+    contentDiv.appendChild(iconSpan);
+
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'toast-message';
+    msgSpan.textContent = message;
+    contentDiv.appendChild(msgSpan);
+
+    toast.appendChild(contentDiv);
+
+    if (actions && actions.length > 0) {
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'toast-actions';
+      actions.forEach(act => {
+        const btn = document.createElement('button');
+        btn.className = `toast-btn ${act.primary ? 'primary' : ''}`;
+        btn.textContent = act.label;
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          if (this._toastTimeout) {
+            clearTimeout(this._toastTimeout);
+            this._toastTimeout = null;
+          }
+          toast.remove();
+          if (act.onClick) act.onClick();
+        };
+        actionsDiv.appendChild(btn);
+      });
+      toast.appendChild(actionsDiv);
+    }
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close-btn';
+    closeBtn.innerHTML = '✕';
+    closeBtn.setAttribute('aria-label', 'Close notification');
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (this._toastTimeout) {
+        clearTimeout(this._toastTimeout);
+        this._toastTimeout = null;
+      }
+      toast.remove();
+    };
+    toast.appendChild(closeBtn);
+
     container.appendChild(toast);
-    setTimeout(() => {
+
+    // Give extra time if interactive actions are present
+    const duration = (actions && actions.length > 0) ? 6500 : 3500;
+    this._toastTimeout = setTimeout(() => {
       toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, 3500);
+      setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+      }, 300);
+    }, duration);
   },
 
   async refreshAll() {
@@ -662,6 +728,8 @@ const App = {
   showOverview(push = true) {
     this.state.currentView = 'overview';
     this.state.currentFilePath = null;
+    this.state.currentFolderPath = null;
+    this.state.currentFileType = null;
     document.getElementById('view-overview').style.display = 'flex';
     document.getElementById('view-editor').style.display = 'none';
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -675,6 +743,7 @@ const App = {
       }
     }
 
+    this.updateBurgerMenuState();
     this.renderFileTree();
     this.loadDashboardData();
   },
@@ -735,36 +804,23 @@ const App = {
       // Update WYSIWYG
       this.renderWYSIWYG(data.content);
 
-      // Ensure content tabs are visible for files
-      const contentTabBar = document.getElementById('content-tab-bar');
-      if (contentTabBar) contentTabBar.style.display = 'flex';
-
       // Handle Special and Mode Tabs
       const isSpecial = ['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].includes(data.type);
-      const tabSpecial = document.getElementById('tab-special');
-      const tabWysiwyg = document.getElementById('tab-wysiwyg');
-      const tabRaw = document.getElementById('tab-raw');
       const shoppingActions = document.getElementById('shopping-special-actions');
 
       if (shoppingActions) {
         shoppingActions.style.display = (data.type === 'shopping') ? 'flex' : 'none';
       }
 
-      if (tabWysiwyg) tabWysiwyg.style.display = 'inline-flex';
-      if (tabRaw) tabRaw.style.display = 'inline-flex';
-
+      // If available open interactive, otherwise choose visual
       if (isSpecial) {
-        if (tabSpecial) {
-          tabSpecial.style.display = 'inline-flex';
-          tabSpecial.textContent = 'Interactive';
-        }
-        // Default to interactive mode for special files (shopping list, tasks, calendar, recipes, mealplan)
         this.switchEditorTab('special');
         this.renderSpecialView(data.type, path, data.content);
       } else {
-        if (tabSpecial) tabSpecial.style.display = 'none';
         this.switchEditorTab('wysiwyg');
       }
+
+      this.updateBurgerMenuState();
 
     } catch (e) {
       this.showToast('Failed to open file: ' + e.message, 'info');
@@ -780,33 +836,35 @@ const App = {
 
     this.state.currentTab = tabName;
 
-    const tabSpecial = document.getElementById('tab-special');
-    const tabWysiwyg = document.getElementById('tab-wysiwyg');
-    const tabRaw = document.getElementById('tab-raw');
-
     const paneSpecial = document.getElementById('pane-special');
     const paneWysiwyg = document.getElementById('pane-wysiwyg');
     const paneRaw = document.getElementById('pane-raw');
 
-    [tabSpecial, tabWysiwyg, tabRaw].forEach(t => { if (t) t.classList.remove('active'); });
     [paneSpecial, paneWysiwyg, paneRaw].forEach(p => { if (p) p.style.display = 'none'; });
 
     if (tabName === 'special') {
-      if (tabSpecial) tabSpecial.classList.add('active');
       if (paneSpecial) paneSpecial.style.display = 'block';
       // Re-render special view with current content so changes in raw immediately reflect in interactive mode
       if (this.state.currentFileType && this.state.currentFilePath) {
         this.renderSpecialView(this.state.currentFileType, this.state.currentFilePath, this.state.currentFileContent);
       }
     } else if (tabName === 'raw') {
-      if (tabRaw) tabRaw.classList.add('active');
       if (paneRaw) paneRaw.style.display = 'flex';
       if (rawTextarea) rawTextarea.value = this.state.currentFileContent;
     } else {
-      if (tabWysiwyg) tabWysiwyg.classList.add('active');
       if (paneWysiwyg) paneWysiwyg.style.display = 'flex';
       this.renderWYSIWYG(this.state.currentFileContent);
     }
+
+    // Update current mode badge in editor toolbar
+    const badge = document.getElementById('editor-mode-badge');
+    if (badge) {
+      if (tabName === 'special') badge.textContent = 'Interactive';
+      else if (tabName === 'raw') badge.textContent = 'Raw';
+      else badge.textContent = 'Visual';
+    }
+
+    this.updateBurgerMenuState();
   },
 
   renderWYSIWYG(markdownText) {
@@ -1251,10 +1309,33 @@ const App = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: ingredientText })
       });
-      this.showToast(`Added "${ingredientText}" to shopping list!`, 'success');
       this.loadDashboardData();
+      this.showToast(`Added "${ingredientText}" to shopping list`, 'success', [
+        {
+          label: 'Go to list',
+          primary: false,
+          onClick: () => this.openFile('shopping/list.md')
+        },
+        {
+          label: 'Undo',
+          primary: true,
+          onClick: async () => {
+            try {
+              await fetch('/api/shopping/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: ingredientText })
+              });
+              this.loadDashboardData();
+              this.showToast(`Removed "${ingredientText}" from shopping list`, 'info');
+            } catch (err) {
+              this.showToast('Failed to undo: ' + err.message, 'info');
+            }
+          }
+        }
+      ]);
     } catch (e) {
-      this.showToast('Failed to add ingredient', 'info');
+      this.showToast('Failed to add ingredient: ' + e.message, 'info');
     }
   },
 
@@ -1272,7 +1353,13 @@ const App = {
         count++;
       }
     }
-    this.showToast(`Added ${count} ingredients to shopping list!`, 'success');
+    this.showToast(`Added ${count} ingredients to shopping list!`, 'success', [
+      {
+        label: 'Go to list',
+        primary: true,
+        onClick: () => this.openFile('shopping/list.md')
+      }
+    ]);
     this.loadDashboardData();
   },
 
@@ -1280,14 +1367,7 @@ const App = {
     const title = document.getElementById('recipe-title')?.textContent || 'this recipe';
     const promptText = `Please read the ingredients from this recipe (${title} at ${this.state.currentFilePath}) and add all required items to shopping/list.md, grouping them cleanly into appropriate categories.`;
     
-    // Ensure file chat is expanded
-    const body = document.getElementById('file-chat-body');
-    const btn = document.getElementById('toggle-chat-collapse');
-    if (body && body.style.display === 'none') {
-      body.style.display = 'block';
-      if (btn) btn.textContent = '▾';
-    }
-
+    this.openFileAssistantModal();
     const input = document.getElementById('file-chat-input');
     if (input) input.value = promptText;
 
@@ -1623,10 +1703,10 @@ const App = {
     const ctxBadge = document.getElementById('file-chat-context-badge');
     if (ctxBadge) ctxBadge.textContent = `Folder: ${folderPath}/`;
 
-    // In folder view, hide tabs since folder view only displays directory contents
-    const contentTabBar = document.getElementById('content-tab-bar');
-    if (contentTabBar) contentTabBar.style.display = 'none';
+    const badge = document.getElementById('editor-mode-badge');
+    if (badge) badge.textContent = 'Folder';
 
+    this.updateBurgerMenuState();
     this.switchEditorTab('special');
     this.renderSpecialView('folder', folderPath, '');
   },
@@ -1791,7 +1871,140 @@ const App = {
     if (input) input.value = '';
   },
 
+  // ===== Burger Menu & Assistant Modal =====
+  toggleBurgerMenu() {
+    const drawer = document.getElementById('burger-drawer');
+    if (!drawer) return;
+    if (drawer.classList.contains('open')) {
+      this.closeBurgerMenu();
+    } else {
+      this.openBurgerMenu();
+    }
+  },
+
+  openBurgerMenu() {
+    const drawer = document.getElementById('burger-drawer');
+    const overlay = document.getElementById('burger-overlay');
+    this.updateBurgerMenuState();
+    if (overlay) overlay.classList.add('open');
+    if (drawer) drawer.classList.add('open');
+  },
+
+  closeBurgerMenu() {
+    const drawer = document.getElementById('burger-drawer');
+    const overlay = document.getElementById('burger-overlay');
+    if (overlay) overlay.classList.remove('open');
+    if (drawer) drawer.classList.remove('open');
+  },
+
+  updateBurgerMenuState() {
+    const isFileView = (this.state.currentView === 'editor' && !!this.state.currentFilePath);
+    const modeSection = document.getElementById('burger-mode-section');
+    const fileSection = document.getElementById('burger-file-section');
+    const subTitle = document.getElementById('burger-assistant-subtitle');
+    const deleteSub = document.getElementById('burger-delete-sub');
+
+    if (isFileView) {
+      if (modeSection) modeSection.style.display = 'block';
+      if (fileSection) fileSection.style.display = 'block';
+      const baseName = this.state.currentFilePath.split('/').pop();
+      if (subTitle) subTitle.textContent = `Ask about ${baseName}`;
+      if (deleteSub) deleteSub.textContent = `Remove ${baseName}`;
+
+      const isSpecial = ['shopping', 'recipe', 'mealplan', 'todo', 'calendar'].includes(this.state.currentFileType);
+      const btnSpecial = document.getElementById('burger-mode-special');
+      const btnWysiwyg = document.getElementById('burger-mode-wysiwyg');
+      const btnRaw = document.getElementById('burger-mode-raw');
+
+      if (btnSpecial) {
+        btnSpecial.style.display = isSpecial ? 'flex' : 'none';
+        btnSpecial.classList.toggle('active', this.state.currentTab === 'special');
+      }
+      if (btnWysiwyg) {
+        btnWysiwyg.classList.toggle('active', this.state.currentTab === 'wysiwyg');
+      }
+      if (btnRaw) {
+        btnRaw.classList.toggle('active', this.state.currentTab === 'raw');
+      }
+    } else {
+      if (modeSection) modeSection.style.display = 'none';
+      if (fileSection) fileSection.style.display = 'none';
+      if (subTitle) subTitle.textContent = 'Family Assistant';
+    }
+  },
+
+  selectBurgerMode(mode) {
+    this.switchEditorTab(mode);
+    this.updateBurgerMenuState();
+    this.closeBurgerMenu();
+  },
+
+  handleBurgerOpenAssistant() {
+    this.closeBurgerMenu();
+    if (this.state.currentView === 'editor' && this.state.currentFilePath) {
+      this.openFileAssistantModal();
+    } else {
+      this.showOverview();
+      setTimeout(() => {
+        const chatInput = document.getElementById('overview-chat-input');
+        const chatCard = document.querySelector('.ai-chat-card');
+        if (chatCard) chatCard.scrollIntoView({ behavior: 'smooth' });
+        if (chatInput) chatInput.focus();
+      }, 100);
+    }
+  },
+
+  openFileAssistantModal() {
+    const modal = document.getElementById('file-assistant-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const ctxBadge = document.getElementById('file-chat-context-badge');
+    if (ctxBadge && this.state.currentFilePath) {
+      ctxBadge.textContent = `Context: ${this.state.currentFilePath}`;
+    }
+    const input = document.getElementById('file-chat-input');
+    if (input) {
+      setTimeout(() => input.focus(), 50);
+    }
+  },
+
+  closeFileAssistantModal() {
+    const modal = document.getElementById('file-assistant-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  async confirmDeleteCurrentFile() {
+    const path = this.state.currentFilePath;
+    if (!path) return;
+
+    const confirmed = window.confirm(`Are you sure you want to delete "${path}"? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    this.closeBurgerMenu();
+
+    try {
+      const res = await fetch('/api/file/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      });
+      const data = await res.json();
+      if (data.success) {
+        this.showToast(`Deleted ${path}`, 'success');
+        this.state.currentFilePath = null;
+        this.state.currentFileType = null;
+        await this.loadFiles();
+        this.showOverview(true);
+      } else {
+        this.showToast(`Failed to delete: ${data.error || 'Unknown error'}`, 'info');
+      }
+    } catch (e) {
+      this.showToast(`Error deleting file: ${e.message}`, 'info');
+    }
+  },
+
   toggleFileChatCollapse() {
+    // Kept for backward compatibility if invoked
     const body = document.getElementById('file-chat-body');
     const btn = document.getElementById('toggle-chat-collapse');
     if (!body || !btn) return;
@@ -1814,13 +2027,7 @@ const App = {
   },
 
   async executeSpecialAction(action) {
-    // Ensure chatbox is open so user sees prompt and progress
-    const body = document.getElementById('file-chat-body');
-    const btn = document.getElementById('toggle-chat-collapse');
-    if (body && body.style.display === 'none') {
-      body.style.display = 'block';
-      if (btn) btn.textContent = '▾';
-    }
+    this.openFileAssistantModal();
 
     let promptText = '';
     if (action === 'group_categories') {
