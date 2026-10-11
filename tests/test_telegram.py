@@ -156,6 +156,58 @@ class TestTelegramBot(unittest.TestCase):
         call_text = bot.send_message.call_args[0][1]
         self.assertIn("Access Denied", call_text)
 
+    def test_voice_message_handling(self):
+        update = {
+            "update_id": 10,
+            "message": {
+                "chat": {"id": 12345},
+                "voice": {
+                    "file_id": "voice_file_123",
+                    "duration": 5,
+                    "mime_type": "audio/ogg"
+                }
+            }
+        }
+        self.mock_sandbox.execute_prompt.return_value = {
+            "response": "Added milk and eggs to shopping list.",
+            "files_modified": ["shopping/list.md"]
+        }
+        self.bot._handle_update(update)
+        self.bot.download_file.assert_called_with("voice_file_123", unittest.mock.ANY)
+        self.mock_sandbox.execute_prompt.assert_called()
+        prompt_arg = self.mock_sandbox.execute_prompt.call_args[0][0]
+        self.assertIn("voice", prompt_arg.lower())
+        self.bot.send_message.assert_called()
+        last_call_text = self.bot.send_message.call_args_list[-1][0][1]
+        self.assertIn("Added milk and eggs", last_call_text)
+
+    def test_audio_message_handling(self):
+        update = {
+            "update_id": 11,
+            "message": {
+                "chat": {"id": 12345},
+                "caption": "Grocery list update",
+                "audio": {
+                    "file_id": "audio_file_456",
+                    "file_name": "memo.mp3",
+                    "duration": 12,
+                    "mime_type": "audio/mpeg"
+                }
+            }
+        }
+        self.mock_sandbox.execute_prompt.return_value = {
+            "response": "Updated todos with grocery note.",
+            "files_modified": ["todo/list.md"]
+        }
+        self.bot._handle_update(update)
+        self.bot.download_file.assert_called_with("audio_file_456", unittest.mock.ANY)
+        self.mock_sandbox.execute_prompt.assert_called()
+        prompt_arg = self.mock_sandbox.execute_prompt.call_args[0][0]
+        self.assertIn("Grocery list update", prompt_arg)
+        self.bot.send_message.assert_called()
+        last_call_text = self.bot.send_message.call_args_list[-1][0][1]
+        self.assertIn("Updated todos", last_call_text)
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -154,6 +154,7 @@ class TelegramBot:
         text = msg.get("text", "").strip()
         caption = msg.get("caption", "").strip()
         photos = msg.get("photo")
+        voice = msg.get("voice") or msg.get("audio")
 
         # 1. Reset command
         if text.startswith("/reset"):
@@ -170,6 +171,7 @@ class TelegramBot:
             help_text = (
                 "👋 *Welcome to InFaPla Bot!*\n\n"
                 "I am your family planning companion. Here are some things you can do:\n\n"
+                "🎙️ *Voice message*: Send a voice note (e.g. 'Add milk and eggs to shopping list') and I will process it!\n"
                 "📸 *Invite screenshot*: Send a photo/screenshot of an invitation, and I will extract the event and add it to your calendar!\n"
                 "🍲 *Recipe link*: Send a web link to a recipe, and I will format and save it under recipes.\n"
                 "💬 *Ask questions*: Ask anything about your shopping list, meal plans, or todos.\n\n"
@@ -215,7 +217,43 @@ class TelegramBot:
                 self.send_message(chat_id, f"📅 *Calendar / Upcoming Events:*\n\n{ev_str}")
             return
 
-        # 4. Handle photos (Screenshot of an invite -> calendar entry)
+        # 4. Handle voice / audio messages
+        if voice:
+            self.send_message(chat_id, "🎙️ Listening to your voice message...")
+            file_id = voice["file_id"]
+            ext = ".ogg"
+            if msg.get("audio"):
+                file_name = msg["audio"].get("file_name", "")
+                if file_name and "." in file_name:
+                    ext = Path(file_name).suffix
+            audio_filename = f"voice_{chat_id}_{int(time.time())}{ext}"
+            audio_path = self.storage.data_dir / audio_filename
+
+            if self.download_file(file_id, audio_path):
+                prompt = (
+                    f"A family member sent a voice/audio message saved at '{audio_filename}'. "
+                    f"{'User note: ' + caption if caption else ''}\n"
+                    "Please listen to and transcribe this audio message using your file inspection tools. "
+                    "Then, fulfill their request (such as updating the shopping list, updating or adding todos, "
+                    "adding events to the calendar, saving a recipe, or answering their question). "
+                    f"After processing, delete the temporary audio file '{audio_filename}'. "
+                    "Respond with a clear, helpful confirmation of what you understood and did."
+                )
+                try:
+                    result = self.sandbox.execute_prompt(prompt)
+                    reply = result.get("response", "Voice message processed!")
+                    self.send_message(chat_id, f"🎙️ {reply}")
+                finally:
+                    if audio_path.exists():
+                        try:
+                            audio_path.unlink()
+                        except Exception:
+                            pass
+            else:
+                self.send_message(chat_id, "❌ Sorry, I had trouble downloading the voice message.")
+            return
+
+        # 5. Handle photos (Screenshot of an invite -> calendar entry)
         if photos:
             self.send_message(chat_id, "🔍 Analyzing invite screenshot and creating calendar event...")
             # Pick highest resolution photo
@@ -233,14 +271,21 @@ class TelegramBot:
                     f"After creating the .ics file, delete the temporary image 'calendar/{img_filename}'. "
                     "Respond with a clear, cheerful confirmation of the event that was scheduled."
                 )
-                result = self.sandbox.execute_prompt(prompt)
-                reply = result.get("response", "Event created in calendar!")
-                self.send_message(chat_id, f"📅 {reply}")
+                try:
+                    result = self.sandbox.execute_prompt(prompt)
+                    reply = result.get("response", "Event created in calendar!")
+                    self.send_message(chat_id, f"📅 {reply}")
+                finally:
+                    if img_path.exists():
+                        try:
+                            img_path.unlink()
+                        except Exception:
+                            pass
             else:
                 self.send_message(chat_id, "❌ Sorry, I had trouble downloading the screenshot.")
             return
 
-        # 5. Handle Recipe URLs
+        # 6. Handle Recipe URLs
         urls = URL_REGEX.findall(text)
         if urls:
             url = urls[0]
@@ -260,7 +305,7 @@ class TelegramBot:
             self.send_message(chat_id, f"🍲 {reply}")
             return
 
-        # 6. Generic queries / questions
+        # 7. Generic queries / questions
         if text:
             # Let user know processing has started
             prompt = f"Family member on Telegram asks:\n{text}"

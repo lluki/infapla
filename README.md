@@ -45,6 +45,7 @@
 ### 3. Telegram Companion Bot
 - Listens as a Telegram bot (via long-polling, no public webhook required).
 - Supports key family workflows:
+  - 🎙️ **Voice Message**: Send a voice note (e.g., "Add eggs and oat milk to shopping list") -> the agent transcribes and fulfills the request.
   - 📸 **Invite Screenshot**: Send a photo/screenshot of an invitation -> the agent extracts details and automatically creates an `.ics` entry in `calendar/`.
   - 🍲 **Recipe Link**: Send a recipe URL -> the agent scrapes and creates a formatted recipe under `shopping/recipes/`.
   - 💬 **Generic Questions**: Ask questions about shopping items, meal plans, or family schedule.
