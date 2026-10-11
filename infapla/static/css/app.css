@@ -130,9 +130,107 @@ body {
   color: var(--success);
 }
 
-.status-badge.dirty {
-  background-color: rgba(245, 158, 11, 0.15);
-  color: var(--warning);
+/* AI Topmost Bar Status Button */
+.ai-header-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  animation: fadeInStatus 0.25s ease-out;
+}
+
+@keyframes fadeInStatus {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ai-header-status-btn.thinking {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: var(--accent);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.ai-header-status-btn.thinking:hover {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
+}
+
+.ai-spinner-ring {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(56, 189, 248, 0.25);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+  animation: aiStatusSpin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes aiStatusSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-header-status-btn.done {
+  background: var(--success-soft);
+  border: 1px solid var(--success);
+  color: var(--success);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+  animation: checkmarkButtonClick 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.ai-header-status-btn.done:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #34d399;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.35);
+}
+
+.ai-check-icon {
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: inline-block;
+  animation: checkmarkPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes checkmarkButtonClick {
+  0% {
+    transform: scale(0.9);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes checkmarkPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .burger-btn {
@@ -1876,10 +1974,78 @@ body {
   font-size: 0.9rem;
 }
 
-@media (max-width: 600px) {
-  .ingredient-picker-dialog {
-    max-width: 98%;
-    max-height: 90vh;
+@media (max-width: 640px) {
+  .ai-header-status-btn .ai-header-text {
+    display: none;
+  }
+  .ai-header-status-btn {
+    padding: 0.4rem;
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    justify-content: center;
+  }
+
+  /* Mobile: Full-Screen Modals */
+  .app-modal-overlay,
+  #event-modal,
+  #diff-modal,
+  #file-assistant-modal {
+    padding: 0 !important;
+    inset: 0 !important;
+    display: flex;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+  }
+
+  .assistant-modal-dialog,
+  .ingredient-picker-dialog,
+  .diff-modal-dialog,
+  #event-modal > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .assistant-modal-header,
+  .ingredient-picker-header,
+  .diff-modal-header {
+    border-radius: 0 !important;
+    padding: 1rem 1.25rem !important;
+  }
+
+  .assistant-modal-body,
+  .ingredient-picker-body,
+  .diff-modal-body {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+    padding: 1rem 1.25rem !important;
+  }
+
+  .assistant-modal-dialog .ai-messages-list {
+    max-height: none !important;
+    flex: 1 !important;
+    min-height: 250px !important;
+  }
+
+  .ingredient-picker-dialog .ingredient-suggestions-scroll {
+    max-height: none !important;
+    flex: 1 !important;
+    min-height: 250px !important;
+  }
+
+  #event-modal > div {
+    overflow-y: auto !important;
+    padding: 1.25rem !important;
   }
 }
 

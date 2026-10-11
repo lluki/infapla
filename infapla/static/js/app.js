@@ -28,6 +28,7 @@ const App = {
     diffFormat: 'side-by-side',
     ingredientSuggestions: null,
     currentShoppingData: null,
+    aiStatus: 'idle',
   },
 
   init() {
@@ -2201,11 +2202,53 @@ const App = {
     if (input) {
       setTimeout(() => input.focus(), 50);
     }
+    // If opening the modal after completion, clear the done status
+    if (this.state.aiStatus === 'done') {
+      this.state.aiStatus = 'idle';
+    }
+    this.updateAiHeaderStatus();
   },
 
   closeFileAssistantModal() {
     const modal = document.getElementById('file-assistant-modal');
     if (modal) modal.style.display = 'none';
+    this.updateAiHeaderStatus();
+  },
+
+  updateAiHeaderStatus() {
+    const btn = document.getElementById('ai-header-status-btn');
+    const icon = document.getElementById('ai-header-icon');
+    const text = document.getElementById('ai-header-text');
+    if (!btn || !icon || !text) return;
+
+    const modal = document.getElementById('file-assistant-modal');
+    const isModalOpen = (modal && modal.style.display !== 'none');
+
+    // Only show indicator in topmost bar when modal AI dialog is closed
+    if (isModalOpen) {
+      btn.style.display = 'none';
+      return;
+    }
+
+    if (this.state.aiStatus === 'thinking') {
+      btn.style.display = 'inline-flex';
+      btn.className = 'ai-header-status-btn thinking';
+      btn.title = 'AI is thinking... Click to view';
+      icon.innerHTML = '<span class="ai-spinner-ring"></span>';
+      text.textContent = 'Thinking...';
+    } else if (this.state.aiStatus === 'done') {
+      btn.style.display = 'inline-flex';
+      btn.className = 'ai-header-status-btn done';
+      btn.title = 'AI finished! Click to view';
+      icon.innerHTML = '<span class="ai-check-icon">✓</span>';
+      text.textContent = 'Done';
+    } else {
+      btn.style.display = 'none';
+    }
+  },
+
+  handleAiHeaderStatusClick() {
+    this.openFileAssistantModal();
   },
 
   async confirmDeleteCurrentFile() {
@@ -2294,6 +2337,10 @@ const App = {
       sendBtn.textContent = 'Running...';
     }
 
+    // Set AI status to thinking and update topmost bar indicator if dialog is closed
+    this.state.aiStatus = 'thinking';
+    this.updateAiHeaderStatus();
+
     // Append user message
     const userMsg = document.createElement('div');
     userMsg.className = 'chat-message user';
@@ -2377,12 +2424,17 @@ const App = {
                   }
                 }
 
+                this.state.aiStatus = 'done';
+                this.updateAiHeaderStatus();
+
                 // ALWAYS reload files from filesystem, dashboard cards, recent changes, and git status
                 await this.loadFiles();
                 this.loadDashboardData();
                 this.loadRecentChanges();
                 this.checkGitStatus();
               } else if (eventData.type === 'error') {
+                this.state.aiStatus = 'idle';
+                this.updateAiHeaderStatus();
                 if (statusDiv) {
                   statusDiv.className = 'message-status';
                   statusDiv.style.color = 'var(--danger)';
@@ -2401,13 +2453,24 @@ const App = {
         statusDiv.innerHTML = `<span>✓</span> <span>Done</span>`;
       }
 
+      if (this.state.aiStatus === 'thinking') {
+        this.state.aiStatus = 'done';
+        this.updateAiHeaderStatus();
+      }
+
     } catch (e) {
+      this.state.aiStatus = 'idle';
+      this.updateAiHeaderStatus();
       if (statusDiv) {
         statusDiv.className = 'message-status';
         statusDiv.style.color = 'var(--danger)';
         statusDiv.innerHTML = `<span>✕</span> <span>Connection error: ${e.message}</span>`;
       }
     } finally {
+      if (this.state.aiStatus === 'thinking') {
+        this.state.aiStatus = 'idle';
+        this.updateAiHeaderStatus();
+      }
       if (sendBtn) {
         sendBtn.disabled = false;
         sendBtn.textContent = 'Send';

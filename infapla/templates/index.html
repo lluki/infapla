@@ -23,6 +23,12 @@
     </div>
 
     <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <!-- AI Header Status Indicator (Spinner when thinking, Checkmark when done) -->
+      <button class="ai-header-status-btn" id="ai-header-status-btn" style="display: none;" onclick="App.handleAiHeaderStatusClick()" aria-label="AI Status" title="AI Status">
+        <span class="ai-header-icon" id="ai-header-icon"></span>
+        <span class="ai-header-text" id="ai-header-text">Thinking...</span>
+      </button>
+
       <nav class="header-nav">
         <button class="nav-btn active" id="nav-overview" onclick="App.showOverview()">
           <span>🏠</span><span class="nav-text">Overview</span>

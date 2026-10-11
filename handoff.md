@@ -55,7 +55,13 @@ InFaPla/
   - **View Mode Chooser**: "Interactive", "Visual", and "Raw" moved out of the editor content window into the burger menu. Opening a file automatically chooses Interactive if available (shopping, recipe, meal plan, todo, calendar), otherwise Visual.
   - **🗑️ Delete File**: Dedicated file removal action in the burger menu asking for confirmation before deleting via `/api/file/delete`.
   - **Navigation Shortcuts**: Quick jumps to Overview, Shopping List, Tasks, Calendar, and New File creation.
-- **Decluttered File View**: Removed the embedded top assistant card and mode tabs from the file view layout, maximizing editor screen real estate.
+- **Decluttered File View & Mobile Full-Screen Modals**:
+  - Removed embedded assistant card and mode tabs from the file view layout, maximizing editor screen real estate.
+  - On mobile screens (`@media (max-width: 640px)`), all modal dialogs (Ingredient Picker, File AI Assistant, Calendar Add Event, Diff Viewer) expand to full-screen views (`100vw x 100dvh`) with native sheet feel and scrollable dialog bodies.
+- **Topmost Bar AI Status Indicator**:
+  - When closing the AI modal dialog while the assistant is running/thinking, an animated spinner appears in the topmost navigation header.
+  - Upon AI turn completion, the spinner smoothly clicks into an animated green checkmark (`✓`).
+  - Clicking the indicator button in either state (spinner or green checkmark) immediately re-opens the modal AI dialog.
 - **Enhanced Toast Notifications**:
   - Strictly single active notification (clears existing toast before displaying the next).
   - Prominent sizing with comfortable padding, and full-width layout on mobile screens (`@media (max-width: 600px)`).
