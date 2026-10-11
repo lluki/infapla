@@ -29,6 +29,19 @@ const App = {
     ingredientSuggestions: null,
     currentShoppingData: null,
     aiStatus: 'idle',
+    timezone: 'Europe/Zurich',
+    calendarIcsUrl: null,
+  },
+
+  updateTimezoneUI(tz) {
+    if (!tz) return;
+    this.state.timezone = tz;
+    const dashTz = document.getElementById('dash-cal-tz');
+    if (dashTz) dashTz.textContent = `(${tz})`;
+    const calTz = document.getElementById('calendar-tz-badge');
+    if (calTz) calTz.textContent = tz;
+    const modalTz = document.getElementById('modal-ev-tz-label');
+    if (modalTz) modalTz.textContent = tz;
   },
 
   init() {
@@ -272,6 +285,9 @@ const App = {
       if (data.data_dir) {
         this.state.dataDir = data.data_dir;
       }
+      if (data.timezone) {
+        this.updateTimezoneUI(data.timezone);
+      }
       const badge = document.getElementById('ai-model-badge');
       if (badge && data.model) {
         const shortModel = data.model.replace('gemini-', '').replace('-low', ' (Fast)');
@@ -478,6 +494,7 @@ const App = {
       const cRes = await fetch('/api/calendar');
       const cData = await cRes.json();
       if (cData.ics_url) this.state.calendarIcsUrl = cData.ics_url;
+      if (cData.timezone) this.updateTimezoneUI(cData.timezone);
       const cCount = document.getElementById('dash-cal-count');
       const cPrev = document.getElementById('dash-cal-preview');
       const events = cData.events || [];
@@ -1881,6 +1898,7 @@ const App = {
       const res = await fetch('/api/calendar');
       const data = await res.json();
       if (data.ics_url) this.state.calendarIcsUrl = data.ics_url;
+      if (data.timezone) this.updateTimezoneUI(data.timezone);
       eventsDiv.innerHTML = '';
       const events = data.events || [];
 

@@ -254,8 +254,10 @@ class TestCalendarParser(unittest.TestCase):
             description="Bring towel and goggles"
         )
         self.assertIn("BEGIN:VCALENDAR", ics_text)
+        self.assertIn("BEGIN:VTIMEZONE", ics_text)
+        self.assertIn("TZID:Europe/Zurich", ics_text)
         self.assertIn("SUMMARY:Kids Swimming Class", ics_text)
-        self.assertIn("DTSTART:20261015T103000", ics_text)
+        self.assertIn("DTSTART;TZID=Europe/Zurich:20261015T103000", ics_text)
 
         events = parse_ics_file(ics_text, filename="test.ics")
         self.assertEqual(len(events), 1)
@@ -264,6 +266,36 @@ class TestCalendarParser(unittest.TestCase):
         self.assertEqual(ev["location"], "Downtown Pool")
         self.assertEqual(ev["description"], "Bring towel and goggles")
         self.assertEqual(ev["start_str"], "2026-10-15 10:30")
+
+    def test_parse_ics_with_utc_and_tzid(self):
+        # 08:30 UTC in October (CEST, UTC+2) should be 10:30 in Europe/Zurich
+        utc_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:utc-event@infapla.local
+SUMMARY:UTC Event
+DTSTART:20261015T083000Z
+DTEND:20261015T093000Z
+END:VEVENT
+END:VCALENDAR"""
+        events = parse_ics_file(utc_ics, default_tz="Europe/Zurich")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["start_str"], "2026-10-15 10:30")
+        self.assertEqual(events[0]["end_str"], "2026-10-15 11:30")
+
+        # Explicit TZID in DTSTART
+        tzid_ics = """BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:tzid-event@infapla.local
+SUMMARY:Zurich Event
+DTSTART;TZID=Europe/Zurich:20261015T140000
+DTEND;TZID=Europe/Zurich:20261015T150000
+END:VEVENT
+END:VCALENDAR"""
+        events2 = parse_ics_file(tzid_ics, default_tz="Europe/Zurich")
+        self.assertEqual(len(events2), 1)
+        self.assertEqual(events2[0]["start_str"], "2026-10-15 14:00")
 
     def test_unfold_ics_lines(self):
         folded = "DESCRIPTION:This is a very long line\n that was folded onto\n  multiple lines"

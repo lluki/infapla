@@ -13,7 +13,7 @@ logger = logging.getLogger("infapla.daemon")
 class InFaPlaDaemon:
     def __init__(self, config: Optional[Config] = None):
         self.config = config or default_config
-        self.storage = Storage(self.config.data_dir)
+        self.storage = Storage(self.config.data_dir, timezone=self.config.timezone)
         self.sandbox = SandboxRunner(
             self.config.data_dir,
             self.config.sandbox_script,

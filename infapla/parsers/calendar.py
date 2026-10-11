@@ -2,6 +2,7 @@ import re
 import uuid
 import hashlib
 import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -18,41 +19,142 @@ def unfold_ics_lines(raw_text: str) -> List[str]:
             unfolded.append(line)
     return unfolded
 
-def parse_ics_datetime(val: str) -> Optional[datetime.datetime]:
+def generate_vtimezone(tz_name: str = "Europe/Zurich") -> str:
+    """
+    Generates standard RFC 5545 VTIMEZONE component for a given timezone.
+    """
+    if tz_name in (
+        "Europe/Zurich", "Europe/Berlin", "Europe/Vienna", "Europe/Paris",
+        "Europe/Rome", "Europe/Madrid", "Europe/Amsterdam", "Europe/Brussels",
+        "Europe/Stockholm", "Europe/Oslo", "Europe/Copenhagen", "Europe/Warsaw"
+    ):
+        return f"""BEGIN:VTIMEZONE
+TZID:{tz_name}
+X-LIC-LOCATION:{tz_name}
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+TZNAME:CEST
+DTSTART:19700329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+DTSTART:19701025T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+END:VTIMEZONE"""
+
+    try:
+        tz = ZoneInfo(tz_name)
+        dt_jan = datetime.datetime(2026, 1, 15, 12, 0, tzinfo=tz)
+        dt_jul = datetime.datetime(2026, 7, 15, 12, 0, tzinfo=tz)
+        off_jan = dt_jan.utcoffset() or datetime.timedelta(0)
+        off_jul = dt_jul.utcoffset() or datetime.timedelta(0)
+
+        def fmt_offset(td):
+            sec = int(td.total_seconds())
+            sign = "+" if sec >= 0 else "-"
+            sec = abs(sec)
+            h = sec // 3600
+            m = (sec % 3600) // 60
+            return f"{sign}{h:02d}{m:02d}"
+
+        if off_jan == off_jul:
+            return f"""BEGIN:VTIMEZONE
+TZID:{tz_name}
+BEGIN:STANDARD
+TZOFFSETFROM:{fmt_offset(off_jan)}
+TZOFFSETTO:{fmt_offset(off_jan)}
+TZNAME:{dt_jan.tzname() or tz_name}
+DTSTART:19700101T000000
+END:STANDARD
+END:VTIMEZONE"""
+        else:
+            std_dt = dt_jan if off_jan < off_jul else dt_jul
+            dst_dt = dt_jul if off_jan < off_jul else dt_jan
+            return f"""BEGIN:VTIMEZONE
+TZID:{tz_name}
+BEGIN:DAYLIGHT
+TZOFFSETFROM:{fmt_offset(std_dt.utcoffset())}
+TZOFFSETTO:{fmt_offset(dst_dt.utcoffset())}
+TZNAME:{dst_dt.tzname() or 'DST'}
+DTSTART:19700329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:{fmt_offset(dst_dt.utcoffset())}
+TZOFFSETTO:{fmt_offset(std_dt.utcoffset())}
+TZNAME:{std_dt.tzname() or 'STD'}
+DTSTART:19701025T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+END:VTIMEZONE"""
+    except Exception:
+        return f"""BEGIN:VTIMEZONE
+TZID:{tz_name}
+BEGIN:STANDARD
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0100
+TZNAME:CET
+DTSTART:19700101T000000
+END:STANDARD
+END:VTIMEZONE"""
+
+def parse_ics_datetime(val: str, default_tz: str = "Europe/Zurich") -> Optional[datetime.datetime]:
     """
     Parses DTSTART or DTEND strings into datetime objects.
     Formats:
     20261012T090000Z
     20261012T090000
     20261012
+    DTSTART;TZID=Europe/Zurich:20261012T090000
     """
     val = val.strip()
-    # Strip parameter prefixes like TZID=...:20261012T090000
-    if ":" in val:
+    extracted_tz = None
+    if ";" in val and ":" in val:
+        params, val_part = val.split(":", 1)
+        for p in params.split(";"):
+            if p.upper().startswith("TZID="):
+                extracted_tz = p.split("=", 1)[1].strip().strip('"')
+        val = val_part
+    elif ":" in val:
         val = val.split(":")[-1]
 
     try:
         if len(val) == 8 and val.isdigit():
             # Date only
             return datetime.datetime.strptime(val, "%Y%m%d")
+
+        effective_tz = extracted_tz or default_tz
+        try:
+            tz = ZoneInfo(effective_tz)
+        except Exception:
+            tz = None
+
         if val.endswith("Z"):
-            return datetime.datetime.strptime(val, "%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+            dt_utc = datetime.datetime.strptime(val, "%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+            if tz:
+                return dt_utc.astimezone(tz)
+            return dt_utc
         if "T" in val:
-            return datetime.datetime.strptime(val[:15], "%Y%m%dT%H%M%S")
+            dt_naive = datetime.datetime.strptime(val[:15], "%Y%m%dT%H%M%S")
+            if tz:
+                return dt_naive.replace(tzinfo=tz)
+            return dt_naive
     except Exception:
         pass
     return None
 
 def format_datetime_ics(dt: datetime.datetime) -> str:
     """
-    Formats a datetime object to standard ICS format.
+    Formats a datetime object to standard local ICS format (YYYYMMDDTHHMMSS).
     """
-    if dt.tzinfo:
-        utc_dt = dt.astimezone(datetime.timezone.utc)
-        return utc_dt.strftime("%Y%m%dT%H%M%SZ")
     return dt.strftime("%Y%m%dT%H%M%S")
 
-def parse_ics_file(file_content: str, filename: str = "") -> List[Dict[str, Any]]:
+def parse_ics_file(file_content: str, filename: str = "", default_tz: str = "Europe/Zurich") -> List[Dict[str, Any]]:
     """
     Parses an .ics file string into a list of event dictionaries.
     """
@@ -82,8 +184,26 @@ def parse_ics_file(file_content: str, filename: str = "") -> List[Dict[str, Any]
                 # Add human readable time strings
                 dt_start = current_event["dtstart"]
                 dt_end = current_event["dtend"]
-                current_event["start_str"] = dt_start.strftime("%Y-%m-%d %H:%M") if dt_start else "TBD"
-                current_event["end_str"] = dt_end.strftime("%Y-%m-%d %H:%M") if dt_end else ""
+                if dt_start:
+                    if dt_start.tzinfo is not None:
+                        try:
+                            dt_start = dt_start.astimezone(ZoneInfo(default_tz))
+                        except Exception:
+                            pass
+                    current_event["start_str"] = dt_start.strftime("%Y-%m-%d %H:%M")
+                else:
+                    current_event["start_str"] = "TBD"
+
+                if dt_end:
+                    if dt_end.tzinfo is not None:
+                        try:
+                            dt_end = dt_end.astimezone(ZoneInfo(default_tz))
+                        except Exception:
+                            pass
+                    current_event["end_str"] = dt_end.strftime("%Y-%m-%d %H:%M")
+                else:
+                    current_event["end_str"] = ""
+
                 current_event["is_all_day"] = (
                     dt_start is not None and 
                     dt_start.hour == 0 and dt_start.minute == 0 and dt_start.second == 0 and
@@ -104,9 +224,9 @@ def parse_ics_file(file_content: str, filename: str = "") -> List[Dict[str, Any]
             if key == "SUMMARY":
                 current_event["summary"] = val
             elif key == "DTSTART":
-                current_event["dtstart"] = parse_ics_datetime(stripped)
+                current_event["dtstart"] = parse_ics_datetime(stripped, default_tz=default_tz)
             elif key == "DTEND":
-                current_event["dtend"] = parse_ics_datetime(stripped)
+                current_event["dtend"] = parse_ics_datetime(stripped, default_tz=default_tz)
             elif key == "LOCATION":
                 current_event["location"] = val
             elif key == "DESCRIPTION":
@@ -122,10 +242,11 @@ def create_ics_event(
     dtend: Optional[datetime.datetime] = None,
     location: str = "",
     description: str = "",
-    uid: Optional[str] = None
+    uid: Optional[str] = None,
+    tz_name: str = "Europe/Zurich"
 ) -> str:
     """
-    Generates a full VCALENDAR string containing a single VEVENT.
+    Generates a full VCALENDAR string containing a VTIMEZONE and a single VEVENT.
     """
     if dtend is None:
         dtend = dtstart + datetime.timedelta(hours=1)
@@ -135,6 +256,7 @@ def create_ics_event(
     now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     start_str = format_datetime_ics(dtstart)
     end_str = format_datetime_ics(dtend)
+    vtz = generate_vtimezone(tz_name)
 
     desc_escaped = description.replace("\\", "\\\\").replace("\n", "\\n").replace(",", "\\,").replace(";", "\\;")
     loc_escaped = location.replace("\\", "\\\\").replace("\n", " ").replace(",", "\\,").replace(";", "\\;")
@@ -144,11 +266,12 @@ def create_ics_event(
 VERSION:2.0
 PRODID:-//InFaPla//Intelligent Family Planner//EN
 CALSCALE:GREGORIAN
+{vtz}
 BEGIN:VEVENT
 UID:{uid}
 DTSTAMP:{now_str}
-DTSTART:{start_str}
-DTEND:{end_str}
+DTSTART;TZID={tz_name}:{start_str}
+DTEND;TZID={tz_name}:{end_str}
 SUMMARY:{sum_escaped}
 LOCATION:{loc_escaped}
 DESCRIPTION:{desc_escaped}

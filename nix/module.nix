@@ -79,6 +79,18 @@ in {
       default = 30;
       description = "Interval in seconds between periodic git auto-commits.";
     };
+
+    timezone = mkOption {
+      type = types.str;
+      default = "Europe/Zurich";
+      description = "Default timezone for calendar events.";
+    };
+
+    calendarIcsUrl = mkOption {
+      type = types.str;
+      default = "cal/60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a/calendar.ics";
+      description = "Radicale calendar ICS feed URL path.";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -100,6 +112,8 @@ in {
         INFAPLA_HOST = cfg.host;
         INFAPLA_PORT = toString cfg.port;
         INFAPLA_GIT_INTERVAL = toString cfg.gitCommitInterval;
+        INFAPLA_TIMEZONE = cfg.timezone;
+        INFAPLA_CALENDAR_ICS_URL = cfg.calendarIcsUrl;
         AGY_BIN = cfg.agyBin;
         AGY_MODEL = cfg.agyModel;
         AGY_EFFORT = cfg.agyEffort;

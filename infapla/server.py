@@ -43,6 +43,7 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
             "model": sandbox.model,
             "effort": sandbox.effort,
             "data_dir": str(storage.data_dir),
+            "timezone": cfg.timezone,
             "telegram_active": daemon.telegram.is_configured()
         })
 
@@ -264,7 +265,8 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
                 cleaned.append(item)
             return jsonify({
                 "events": cleaned,
-                "ics_url": cfg.calendar_ics_url
+                "ics_url": cfg.calendar_ics_url,
+                "timezone": cfg.timezone
             })
         except Exception as e:
             return jsonify({"error": str(e)}), 500

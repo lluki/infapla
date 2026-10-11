@@ -199,7 +199,7 @@
           <!-- Calendar Card -->
           <div class="dash-card">
             <div class="card-header">
-              <span class="card-title"><span>📅</span> Next Events</span>
+              <span class="card-title"><span>📅</span> Next Events <small id="dash-cal-tz" style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Europe/Zurich)</small></span>
               <span class="card-count" id="dash-cal-count">0 events</span>
             </div>
             <div class="card-content-preview" id="dash-cal-preview">
@@ -325,7 +325,12 @@
             <!-- Calendar Special View -->
             <div id="special-calendar-container" class="calendar-view-ui" style="display: none;">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                <h2>Upcoming Family Schedule</h2>
+                <div>
+                  <h2>Upcoming Family Schedule</h2>
+                  <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
+                    Timezone: <span id="calendar-tz-badge" style="font-weight: 600; color: var(--accent);">Europe/Zurich</span>
+                  </div>
+                </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                   <button class="action-pill-btn" onclick="App.copyCalendarIcsUrl()" title="Copy calendar subscription (.ics) link for Google Calendar">🔗 Subscribe (ICS)</button>
                   <button class="primary-btn" onclick="App.showAddEventModal()">+ Add Event</button>
@@ -386,7 +391,7 @@
         <input type="text" id="modal-ev-title" class="list-input" placeholder="e.g. Doctor appointment">
       </div>
       <div>
-        <label style="font-size: 0.8rem; color: var(--text-secondary);">Start Time</label>
+        <label style="font-size: 0.8rem; color: var(--text-secondary);">Start Time (<span id="modal-ev-tz-label">Europe/Zurich</span>)</label>
         <input type="datetime-local" id="modal-ev-start" class="list-input">
       </div>
       <div>

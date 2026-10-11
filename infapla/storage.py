@@ -11,8 +11,9 @@ from .parsers.calendar import parse_ics_file, create_ics_event, delete_ics_event
 from .parsers.mealplan import parse_mealplan
 
 class Storage:
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, timezone: str = "Europe/Zurich"):
         self.data_dir = Path(data_dir).resolve()
+        self.timezone = timezone
         self._suggestions_cache = None
         self.ensure_initialized()
 
@@ -378,7 +379,7 @@ class Storage:
                 if f.is_file() and f.suffix.lower() in (".ics", ".ical"):
                     try:
                         content = f.read_text(encoding="utf-8", errors="replace")
-                        events.extend(parse_ics_file(content, filename=f.name))
+                        events.extend(parse_ics_file(content, filename=f.name, default_tz=self.timezone))
                     except Exception:
                         pass
         # Sort chronologically by start date
@@ -413,7 +414,8 @@ class Storage:
             dtstart=dtstart,
             dtend=dtend,
             location=location,
-            description=description
+            description=description,
+            tz_name=self.timezone
         )
         target.write_text(ics_text, encoding="utf-8")
         return filename
@@ -446,7 +448,7 @@ class Storage:
                 content = f.read_text(encoding="utf-8", errors="replace")
                 new_content, count = delete_ics_event(content, uid=uid, summary=summary, filename=f.name)
                 if count > 0:
-                    remaining_events = parse_ics_file(new_content, filename=f.name)
+                    remaining_events = parse_ics_file(new_content, filename=f.name, default_tz=self.timezone)
                     rel_p = f"calendar/{f.name}"
                     if remaining_events or f.name == "family.ics":
                         self.write_file(rel_p, new_content)
