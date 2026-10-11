@@ -317,6 +317,18 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
             return jsonify({"success": True})
         return jsonify({"error": "Event not found"}), 404
 
+    @app.route("/cal/<token>/calendar.ics", methods=["GET"])
+    def get_ics_feed(token: str):
+        if token != "60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a":
+            return jsonify({"error": "Unauthorized"}), 401
+        import urllib.request
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:5232/lukas/calendar/") as resp:
+                data = resp.read()
+                return app.response_class(data, mimetype="text/calendar")
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     # Specialized: Recipe & Mealplan
     @app.route("/api/recipe", methods=["GET"])
     def get_recipe():

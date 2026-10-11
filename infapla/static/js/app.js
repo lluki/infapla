@@ -2013,8 +2013,16 @@ const App = {
   },
 
   copyCalendarIcsUrl() {
-    const icsPath = this.state.calendarIcsUrl || '/cal/60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a/calendar.ics';
-    const fullUrl = window.location.origin + icsPath;
+    let icsPath = (this.state.calendarIcsUrl || 'cal/60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a/calendar.ics').replace(/^\/+/, '');
+    // Ensure reverse proxy base path of the app (e.g. /infapla/) is respected
+    let basePath = window.location.pathname;
+    if (basePath.includes('.')) {
+      basePath = basePath.replace(/\/[^\/]*$/, '/');
+    }
+    if (!basePath.endsWith('/')) {
+      basePath += '/';
+    }
+    const fullUrl = window.location.origin + basePath + icsPath;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(fullUrl).then(() => {
         this.showToast('Calendar .ics subscription URL copied to clipboard!', 'success');
