@@ -2001,12 +2001,12 @@ body.modal-open {
     justify-content: center;
   }
 
-  /* Mobile: Full-Screen Modals with Virtual Keyboard Adaptation */
-  .app-modal-overlay,
-  #event-modal,
-  #diff-modal,
-  #file-assistant-modal,
-  #ingredient-picker-modal {
+  /* Mobile: Full-Screen Modals with Virtual Keyboard Adaptation (only when visible/active) */
+  .app-modal-overlay:not([style*="display: none"]),
+  #event-modal:not([style*="display: none"]),
+  #diff-modal:not([style*="display: none"]),
+  #file-assistant-modal:not([style*="display: none"]),
+  #ingredient-picker-modal:not([style*="display: none"]) {
     padding: 0 !important;
     position: fixed !important;
     top: var(--vvt, 0px) !important;
