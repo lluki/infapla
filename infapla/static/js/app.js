@@ -26,6 +26,8 @@ const App = {
     currentDiffMessage: '',
     currentDiffRaw: '',
     diffFormat: 'side-by-side',
+    ingredientSuggestions: null,
+    currentShoppingData: null,
   },
 
   init() {
@@ -64,6 +66,7 @@ const App = {
         this.closeBurgerMenu();
         this.closeFileAssistantModal();
         this.closeAddEventModal();
+        this.closeIngredientPickerModal();
       }
     });
 
@@ -72,6 +75,20 @@ const App = {
       diffModal.addEventListener('click', (e) => {
         if (e.target === diffModal) {
           this.closeDiffModal();
+        }
+      });
+    }
+
+    // Ingredient picker input search and enter listener
+    const pickerInput = document.getElementById('ingredient-picker-input');
+    if (pickerInput) {
+      pickerInput.addEventListener('input', (e) => {
+        this.renderIngredientSuggestions(e.target.value);
+      });
+      pickerInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.submitIngredientPickerInput();
         }
       });
     }
@@ -1027,6 +1044,10 @@ const App = {
     try {
       const res = await fetch('/api/shopping');
       const data = await res.json();
+      this.state.currentShoppingData = data;
+      // Pre-fetch suggestions once in background for zero-latency autocomplete
+      this.prefetchShoppingSuggestions();
+
       listDiv.innerHTML = '';
 
       const activeItems = (data.items || []).filter(i => !i.done);
@@ -1116,7 +1137,10 @@ const App = {
   async addShoppingItem() {
     const input = document.getElementById('add-shopping-input');
     const text = input ? input.value.trim() : '';
-    if (!text) return;
+    if (!text) {
+      this.openIngredientPickerModal();
+      return;
+    }
 
     try {
       await fetch('/api/shopping/add', {
@@ -1154,6 +1178,7 @@ const App = {
         headers: { 'Content-Type': 'application/json' }
       });
       const data = await res.json();
+      this.state.ingredientSuggestions = null;
       await this.loadSpecialShoppingUI();
       this.syncCurrentFileContent();
       this.showToast(`Archived shopping list to ${data.archived_to || 'archive'}!`, 'success');
@@ -1166,6 +1191,216 @@ const App = {
 
   async clearShoppingChecked() {
     return this.archiveShoppingList();
+  },
+
+  // ===== Ingredient Picker Modal & Suggestions =====
+  cleanItemName(text) {
+    if (!text) return '';
+    let s = text.trim();
+    if (s.includes(' category: ')) {
+      s = s.substring(0, s.lastIndexOf(' category: ')).trim();
+    }
+    s = s.replace(/^[-*+]\s+(\[[ xX]\]\s*)?/, '');
+    s = s.replace(/^~~(.*)~~$/, '$1').trim();
+    s = s.replace(/^(?:(?:ca\.?|approx\.?|about|to)\s+)?(?:(?:\d+(?:[./\-\u2013\u2014]\d+)?(?:\s+to\s+\d+(?:[./\-\u2013\u2014]\d+)?)?|\b(?:a|an|one|two|three|ein|eine|einer|eines|etwas|some)\b)\s*(?:[xX*]\s*)?(?:g|kg|oz|lb|lbs|ml|l|cl|dl|tsp|tbsp|el|tl|cup|cups|pinch|pinches|prise|prisen|glas|gläser|stk|stk\.|stück|stücke|bunch|bunches|bund|clove|cloves|zehe|zehen|can|cans|dose|dosen|slice|slices|scheibe|scheiben|piece|pieces|bottle|bottles|flasche|flaschen|packung|packungen|becher|drop|drops|tropfen|inch|small|medium|large|große?|mittlere?|kleine?)\b\s*|\d+(?:[./\-\u2013\u2014]\d+)?\s*(?:[xX*]\s*)?)(?:of\s+|von\s+|x\s+)?/i, '').trim();
+    s = s.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    s = s.replace(/,.*$/, '').trim();
+    return s;
+  },
+
+  async prefetchShoppingSuggestions(force = false) {
+    if (this.state.ingredientSuggestions && !force) return;
+    try {
+      const res = await fetch('/api/shopping/suggestions' + (force ? '?refresh=1' : ''));
+      if (res.ok) {
+        const data = await res.json();
+        this.state.ingredientSuggestions = data.suggestions || [];
+      }
+    } catch (e) {
+      console.warn('Failed to prefetch ingredient suggestions:', e);
+    }
+  },
+
+  async openIngredientPickerModal() {
+    const modal = document.getElementById('ingredient-picker-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    const input = document.getElementById('ingredient-picker-input');
+    if (input) {
+      input.value = '';
+      setTimeout(() => input.focus(), 30);
+    }
+
+    if (!this.state.ingredientSuggestions) {
+      await this.prefetchShoppingSuggestions();
+    }
+    this.renderIngredientSuggestions('');
+  },
+
+  closeIngredientPickerModal() {
+    const modal = document.getElementById('ingredient-picker-modal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+    const input = document.getElementById('ingredient-picker-input');
+    if (input) input.value = '';
+  },
+
+  renderIngredientSuggestions(query = '') {
+    const listEl = document.getElementById('ingredient-suggestions-list');
+    const labelEl = document.getElementById('ingredient-suggestions-label');
+    const countEl = document.getElementById('ingredient-suggestions-count');
+    if (!listEl) return;
+
+    const all = this.state.ingredientSuggestions || [];
+    const q = (query || '').trim().toLowerCase();
+
+    // Determine items already on active shopping list
+    const activeItems = (this.state.currentShoppingData?.items || []).filter(i => !i.done);
+    const activeCleanSet = new Set(
+      activeItems.map(i => this.cleanItemName(i.text).toLowerCase()).filter(Boolean)
+    );
+
+    let filtered = [];
+    if (!q) {
+      if (labelEl) labelEl.textContent = 'Popular Suggestions';
+      filtered = all.slice(0, 40);
+    } else {
+      if (labelEl) labelEl.textContent = `Matching "${query.trim()}"`;
+      const startsWith = [];
+      const contains = [];
+      for (const item of all) {
+        const name = (typeof item === 'string' ? item : item.name) || '';
+        const lower = name.toLowerCase();
+        if (lower.startsWith(q)) {
+          startsWith.push(item);
+        } else if (lower.includes(q)) {
+          contains.push(item);
+        }
+      }
+      filtered = [...startsWith, ...contains];
+    }
+
+    if (countEl) {
+      countEl.textContent = `${filtered.length} found`;
+    }
+
+    listEl.innerHTML = '';
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'ingredient-empty-suggestions';
+      empty.innerHTML = `No matching saved suggestions.<br><span style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.3rem; display:inline-block;">Press <strong>Enter</strong> or click <strong>Add</strong> to add "${query.trim()}" to shopping list.</span>`;
+      listEl.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach(item => {
+      const name = (typeof item === 'string' ? item : item.name) || '';
+      const category = (typeof item === 'object' ? item.category : '') || '';
+      const lower = name.toLowerCase();
+
+      // Check if item is already on active shopping list
+      const isOnList = activeCleanSet.has(lower) ||
+                       activeItems.some(i => {
+                         const rawLower = (i.text || '').toLowerCase();
+                         const cleanLower = this.cleanItemName(i.text).toLowerCase();
+                         return rawLower === lower || cleanLower === lower || rawLower.includes(lower);
+                       });
+
+      const row = document.createElement('div');
+      row.className = `ingredient-suggestion-item ${isOnList ? 'already-on-list' : ''}`;
+      row.setAttribute('role', 'button');
+      row.setAttribute('tabindex', '0');
+
+      let nameHtml = `<span class="ingredient-suggestion-name">${name}</span>`;
+      if (isOnList) {
+        nameHtml += ` <span class="already-on-list-badge">(already on list)</span>`;
+      }
+
+      let metaHtml = '';
+      if (category && category.toLowerCase() !== 'general') {
+        metaHtml += `<span class="ingredient-category-tag">${category}</span>`;
+      }
+
+      row.innerHTML = `
+        <div class="ingredient-suggestion-main">${nameHtml}</div>
+        <div class="ingredient-suggestion-meta">${metaHtml}</div>
+      `;
+
+      row.addEventListener('click', async () => {
+        await this.selectIngredientSuggestion(item, isOnList);
+      });
+
+      row.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          await this.selectIngredientSuggestion(item, isOnList);
+        }
+      });
+
+      listEl.appendChild(row);
+    });
+  },
+
+  async selectIngredientSuggestion(item, wasAlreadyOnList = false) {
+    const name = (typeof item === 'string' ? item : item.name) || '';
+    const category = (typeof item === 'object' ? item.category : '') || undefined;
+    if (!name) return;
+
+    try {
+      await fetch('/api/shopping/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: name,
+          category: (category && category.toLowerCase() !== 'general') ? category : undefined
+        })
+      });
+      this.closeIngredientPickerModal();
+      await this.loadSpecialShoppingUI();
+      this.syncCurrentFileContent();
+      if (wasAlreadyOnList) {
+        this.showToast(`"${name}" is already on list, added again!`, 'info');
+      } else {
+        this.showToast(`Added "${name}" to shopping list`, 'success');
+      }
+    } catch (e) {
+      this.showToast('Failed to add ingredient', 'info');
+    }
+  },
+
+  async submitIngredientPickerInput() {
+    const input = document.getElementById('ingredient-picker-input');
+    const text = input ? input.value.trim() : '';
+    if (!text) return;
+
+    // Check if free text matches any suggestion to preserve category
+    let category = undefined;
+    if (this.state.ingredientSuggestions) {
+      const match = this.state.ingredientSuggestions.find(s => {
+        const sName = typeof s === 'string' ? s : s.name;
+        return sName.toLowerCase() === text.toLowerCase();
+      });
+      if (match && typeof match === 'object' && match.category && match.category.toLowerCase() !== 'general') {
+        category = match.category;
+      }
+    }
+
+    try {
+      await fetch('/api/shopping/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, category })
+      });
+      this.closeIngredientPickerModal();
+      await this.loadSpecialShoppingUI();
+      this.syncCurrentFileContent();
+      this.showToast(`Added "${text}" to shopping list`, 'success');
+    } catch (e) {
+      this.showToast('Failed to add item', 'info');
+    }
   },
 
   // ===== Special Recipe UI =====

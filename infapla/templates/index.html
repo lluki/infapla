@@ -272,8 +272,8 @@
             <!-- Shopping List Special View -->
             <div id="special-shopping-container" class="shopping-list-ui" style="display: none;">
               <div class="list-add-box">
-                <input type="text" id="add-shopping-input" class="list-input" placeholder="Add an item to the shopping list (press Enter)..." onkeydown="if(event.key==='Enter') App.addShoppingItem()">
-                <button class="primary-btn" onclick="App.addShoppingItem()">Add</button>
+                <input type="text" id="add-shopping-input" class="list-input" placeholder="🔍 Add item or pick ingredient..." readonly onclick="App.openIngredientPickerModal()" style="cursor: pointer;">
+                <button class="primary-btn" id="shopping-add-btn" onclick="App.openIngredientPickerModal()">+ Add Item</button>
                 <button class="action-pill-btn" onclick="App.archiveShoppingList()" title="Archive current shopping list to shopping/list-archive/ and start a fresh list">📦 Archive Shopping List</button>
               </div>
               <div id="special-shopping-items" class="items-group">
@@ -460,6 +460,35 @@
           <input type="text" id="file-chat-input" class="ai-input-field" placeholder="Ask AI to modify or inspect this file..." autocomplete="off">
           <button type="submit" class="primary-btn" id="file-chat-send-btn">Send</button>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Ingredient Picker Dialog -->
+  <div id="ingredient-picker-modal" class="app-modal-overlay" style="display: none;" onclick="if(event.target===this) App.closeIngredientPickerModal()">
+    <div class="ingredient-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="ingredient-picker-title">
+      <div class="ingredient-picker-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 1.25rem;">🛒</span>
+          <div id="ingredient-picker-title" style="font-weight: 700; font-size: 1.05rem; color: var(--text-primary);">Add Item / Pick Ingredient</div>
+        </div>
+        <button class="action-pill-btn close-modal-btn" onclick="App.closeIngredientPickerModal()" aria-label="Close dialog" title="Close (Esc)" style="font-size: 1.1rem; line-height: 1; padding: 0.35rem 0.6rem;">✕</button>
+      </div>
+
+      <div class="ingredient-picker-body">
+        <div class="ingredient-picker-input-wrap">
+          <input type="text" id="ingredient-picker-input" class="list-input ingredient-search-input" placeholder="Type ingredient name (e.g. Garlic, Milk) and press Enter..." autocomplete="off">
+          <button class="primary-btn" id="ingredient-picker-submit-btn" onclick="App.submitIngredientPickerInput()">Add</button>
+        </div>
+
+        <div class="ingredient-suggestions-header">
+          <span id="ingredient-suggestions-label">Popular Suggestions</span>
+          <span class="ingredient-suggestions-count" id="ingredient-suggestions-count"></span>
+        </div>
+
+        <div class="ingredient-suggestions-container" id="ingredient-suggestions-list">
+          <!-- Suggestion rows injected here -->
+        </div>
       </div>
     </div>
   </div>

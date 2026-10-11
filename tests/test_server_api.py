@@ -115,6 +115,43 @@ class TestServerAPI(unittest.TestCase):
         # Shopping list should now be reset and empty
         self.assertEqual(len(arch_data["shopping"]["items"]), 0)
 
+    def test_shopping_suggestions_api(self):
+        # 1. GET /api/shopping/suggestions returns 200 and structured suggestions
+        res = self.client.get("/api/shopping/suggestions")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn("suggestions", data)
+        self.assertIn("items", data)
+        self.assertIsInstance(data["suggestions"], list)
+        self.assertTrue(len(data["suggestions"]) > 0)
+
+        # Check fields of suggestion items
+        first = data["suggestions"][0]
+        self.assertIn("name", first)
+        self.assertIn("category", first)
+        self.assertIn("count", first)
+
+        # Verify known ingredients from initial templates are included
+        names = [s["name"] for s in data["suggestions"]]
+        self.assertTrue(any("Spaghetti" in n for n in names))
+        self.assertTrue(any("Garlic" in n for n in names) or any("Basil" in n for n in names))
+
+        # 2. Add an ingredient to shopping list and ensure it appears in suggestions
+        self.client.post("/api/shopping/add", json={"text": "Dragonfruit", "category": "Produce"})
+        res2 = self.client.get("/api/shopping/suggestions")
+        self.assertEqual(res2.status_code, 200)
+        names2 = [s["name"] for s in res2.get_json()["suggestions"]]
+        self.assertIn("Dragonfruit", names2)
+
+        # 3. Add a new recipe markdown file and test force refresh
+        new_recipe_content = "# Coconut Curry\n\n## Ingredients\n- 400ml Coconut Milk\n- 1 tsp Turmeric\n"
+        self.client.post("/api/file/create", json={"path": "shopping/recipes/coconut-curry.md", "content": new_recipe_content})
+        res3 = self.client.get("/api/shopping/suggestions?refresh=1")
+        self.assertEqual(res3.status_code, 200)
+        names3 = [s["name"] for s in res3.get_json()["suggestions"]]
+        self.assertIn("Coconut Milk", names3)
+        self.assertIn("Turmeric", names3)
+
     def test_todo_api(self):
         # ADD todo
         res_add = self.client.post("/api/todo/add", json={"text": "Mow the lawn"})

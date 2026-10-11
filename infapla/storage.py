@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
-from .parsers.shopping import parse_shopping_list, add_shopping_item, toggle_shopping_item, remove_shopping_item, clear_completed_items
+from .parsers.shopping import parse_shopping_list, add_shopping_item, toggle_shopping_item, remove_shopping_item, clear_completed_items, build_ingredient_suggestions
 from .parsers.recipe import parse_recipe
 from .parsers.todo import parse_todo_list, add_todo_item, toggle_todo_item, remove_todo_item
 from .parsers.calendar import parse_ics_file, create_ics_event
@@ -13,6 +13,7 @@ from .parsers.mealplan import parse_mealplan
 class Storage:
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir).resolve()
+        self._suggestions_cache = None
         self.ensure_initialized()
 
     def resolve_path(self, rel_path: str) -> Path:
@@ -230,11 +231,13 @@ class Storage:
         target = self.resolve_path(rel_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+        self._suggestions_cache = None
 
     def delete_file(self, rel_path: str) -> bool:
         target = self.resolve_path(rel_path)
         if target.exists() and target.is_file():
             target.unlink()
+            self._suggestions_cache = None
             return True
         return False
 
@@ -293,6 +296,45 @@ class Storage:
             "archived_to": rel_archive_path,
             "shopping": parse_shopping_list(empty_list)
         }
+
+    def get_shopping_suggestions(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """
+        Precomputes and caches a unique list of clean ingredient suggestions
+        built from existing recipes (*.md) and shopping lists (active and archived).
+        """
+        if not force_refresh and self._suggestions_cache is not None:
+            return self._suggestions_cache
+
+        recipe_contents: List[str] = []
+        recipe_dir = self.data_dir / "shopping" / "recipes"
+        if recipe_dir.exists():
+            for p in sorted(recipe_dir.iterdir()):
+                if p.is_file() and p.suffix.lower() in (".md", ".markdown"):
+                    try:
+                        recipe_contents.append(p.read_text(encoding="utf-8", errors="replace"))
+                    except Exception:
+                        pass
+
+        shopping_contents: List[str] = []
+        list_file = self.data_dir / "shopping" / "list.md"
+        if list_file.exists():
+            try:
+                shopping_contents.append(list_file.read_text(encoding="utf-8", errors="replace"))
+            except Exception:
+                pass
+
+        archive_dir = self.data_dir / "shopping" / "list-archive"
+        if archive_dir.exists():
+            for p in sorted(archive_dir.iterdir()):
+                if p.is_file() and p.suffix.lower() in (".md", ".markdown"):
+                    try:
+                        shopping_contents.append(p.read_text(encoding="utf-8", errors="replace"))
+                    except Exception:
+                        pass
+
+        suggestions = build_ingredient_suggestions(recipe_contents, shopping_contents)
+        self._suggestions_cache = suggestions
+        return suggestions
 
     def get_recipe_data(self, rel_path: str) -> Dict[str, Any]:
         content = self.read_file(rel_path)

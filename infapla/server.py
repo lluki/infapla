@@ -199,6 +199,18 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         updated = storage.archive_shopping_list()
         return jsonify(updated)
 
+    @app.route("/api/shopping/suggestions", methods=["GET"])
+    def get_shopping_suggestions():
+        try:
+            force = request.args.get("refresh", "").lower() in ("1", "true", "yes")
+            suggestions = storage.get_shopping_suggestions(force_refresh=force)
+            return jsonify({
+                "suggestions": suggestions,
+                "items": [s["name"] for s in suggestions]
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     # Specialized: TODO
     @app.route("/api/todo", methods=["GET"])
     def get_todo():

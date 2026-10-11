@@ -6,6 +6,8 @@ from infapla.parsers.shopping import (
     toggle_shopping_item,
     add_shopping_item,
     remove_shopping_item,
+    clean_ingredient_name,
+    build_ingredient_suggestions,
     GROUP_CATEGORIES_PROMPT,
     MERGE_DUPLICATES_PROMPT
 )
@@ -267,6 +269,74 @@ class TestCalendarParser(unittest.TestCase):
         unfolded = unfold_ics_lines(folded)
         self.assertEqual(len(unfolded), 1)
         self.assertEqual(unfolded[0], "DESCRIPTION:This is a very long linethat was folded onto multiple lines")
+
+class TestIngredientSuggestions(unittest.TestCase):
+    def test_clean_ingredient_name(self):
+        # Quantities, ranges, and units
+        self.assertEqual(clean_ingredient_name("400g Spaghetti"), "Spaghetti")
+        self.assertEqual(clean_ingredient_name("500 ml Milch"), "Milch")
+        self.assertEqual(clean_ingredient_name("1-2 TL Zimt"), "Zimt")
+        self.assertEqual(clean_ingredient_name("4 EL Zucker"), "Zucker")
+        self.assertEqual(clean_ingredient_name("1 Glas Pesto (ca. 190g)"), "Pesto")
+        self.assertEqual(clean_ingredient_name("250 g Mehl"), "Mehl")
+        self.assertEqual(clean_ingredient_name("1 cup Flour"), "Flour")
+        self.assertEqual(clean_ingredient_name("1–2 green chilies (chopped)"), "Green chilies")
+        self.assertEqual(clean_ingredient_name("Garlic (finely chopped, ~4–5 cloves)"), "Garlic")
+        self.assertEqual(clean_ingredient_name("200–250 g Paneer (or tofu, cubed)"), "Paneer")
+
+        # Preservation of initial letters (no accidental unit truncation)
+        self.assertEqual(clean_ingredient_name("Lettuce"), "Lettuce")
+        self.assertEqual(clean_ingredient_name("Garlic"), "Garlic")
+        self.assertEqual(clean_ingredient_name("Milk"), "Milk")
+
+        # Markdown stripping
+        self.assertEqual(clean_ingredient_name("- [ ] Fresh Basil"), "Fresh Basil")
+        self.assertEqual(clean_ingredient_name("- [x] ~~Sea Salt~~"), "Sea Salt")
+        self.assertEqual(clean_ingredient_name("Onion category: Produce"), "Onion")
+
+    def test_build_ingredient_suggestions(self):
+        recipe_1 = """# Pasta
+## Ingredients
+- 400g Spaghetti
+- 2 cloves Garlic (minced)
+- 1 tbsp Olive Oil
+"""
+        recipe_2 = """# Garlic Bread
+## Ingredients
+- 1 Baguette
+- 4 cloves Garlic
+- 50g Butter
+"""
+        shop_active = """# Shopping List
+## Produce
+- [ ] Garlic
+- [ ] Tomatoes
+
+## Dairy
+- [ ] Butter
+"""
+        shop_archived = """# Shopping List
+## Produce
+- [x] ~~Garlic category: Produce~~
+- [ ] Apples
+"""
+        suggestions = build_ingredient_suggestions(
+            [recipe_1, recipe_2],
+            [shop_active, shop_archived]
+        )
+        names = [s["name"] for s in suggestions]
+        self.assertIn("Garlic", names)
+        self.assertIn("Spaghetti", names)
+        self.assertIn("Butter", names)
+        self.assertIn("Tomatoes", names)
+        self.assertIn("Apples", names)
+
+        # Garlic appears in both recipes and both shopping lists -> should have highest count
+        garlic_item = next(s for s in suggestions if s["name"] == "Garlic")
+        self.assertEqual(garlic_item["count"], 4)
+        self.assertEqual(garlic_item["category"], "Produce")
+        # Garlic should be top suggestion due to frequency
+        self.assertEqual(suggestions[0]["name"], "Garlic")
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,7 @@
 **Date**: October 11, 2026  
 **Repository**: `InFaPla` (Intelligent Family Planner)  
 **Branch**: `main`  
-**Test Suite**: 36/36 Passing (`python3 -m unittest discover tests`)
+**Test Suite**: 39/39 Passing (`python3 -m unittest discover tests`)
 
 ---
 
@@ -64,8 +64,12 @@ InFaPla/
 - **Live FS Synchronization**: Filesystem and Git status are actively polled every 3 seconds and refreshed on window focus or AI completion.
 
 ### D. Special Interactive Modes
-- **Shopping List (`shopping/list.md`)**:
-  - Interactive checkboxes with auto-save; completed items move to a bottom completed group with strikethrough and a ` category: CAT` postfix, enabling items to return to their original category when unclicked.
+- **Shopping List (`shopping/list.md`) & Ultra-Fast Ingredient Picker**:
+  - **Ingredient Picker Modal**: Clicking "+ Add Item" or the add input opens a modal dialog with an auto-focused search input on top.
+  - **Zero-Latency Client-Side Filtering**: Suggestions pre-computed by the server via `GET /api/shopping/suggestions` (built and cached from all recipes in `shopping/recipes/*.md`, active list in `shopping/list.md`, and past archives in `shopping/list-archive/*.md`). Pre-fetched once on the client for instantaneous client-side autocomplete and search.
+  - **Already On List Detection**: Items already present on the active shopping list are styled in *italics* with a distinct `(already on list)` tag and dimmed opacity. Clicking them remains functional and alerts the user.
+  - **Flexible Submission**: Pressing Enter submits free text or the selected suggestion; clicking any suggestion inserts it via `/api/shopping/add`; pressing ESC, clicking ✕, or clicking the backdrop dismisses the modal.
+  - **Interactive Checkboxes**: Auto-save on toggle; completed items move to a bottom completed group with strikethrough and a ` category: CAT` postfix, enabling items to return to their original category when unclicked.
   - **📦 Archive Shopping List** button calling `/api/shopping/archive` to archive the current list to `shopping/list-archive/YYYY-MM-DD.md` and replace `shopping/list.md` with a clean empty shopping list.
   - AI Assistant action shortcuts: "Group by categories" and "Merge duplicates".
 - **Recipes (`shopping/recipes/*.md`)**:
@@ -88,7 +92,7 @@ Visit `http://localhost:8080` in your browser.
 ```bash
 python3 -m unittest discover tests
 ```
-*Current status: 36 tests passing.*
+*Current status: 39 tests passing.*
 
 ### Start with Telegram Bot (Optional)
 ```bash

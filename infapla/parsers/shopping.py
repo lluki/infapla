@@ -290,3 +290,106 @@ def clear_completed_items(content: str) -> str:
     parsed["items"] = [i for i in parsed["items"] if not i.get("done")]
     return format_shopping_list(parsed)
 
+
+QUANTITY_PREFIX_REGEX = re.compile(
+    r'^(?:(?:ca\.?|approx\.?|about|to)\s+)?'
+    r'(?:'
+        r'(?:\d+(?:[./\-\u2013\u2014]\d+)?(?:\s+to\s+\d+(?:[./\-\u2013\u2014]\d+)?)?|\b(?:a|an|one|two|three|ein|eine|einer|eines|etwas|some)\b)\s*'
+        r'(?:[xX*]\s*)?'
+        r'(?:g|kg|oz|lb|lbs|ml|l|cl|dl|tsp|tbsp|el|tl|cup|cups|pinch|pinches|prise|prisen|glas|gläser|stk|stk\.|stück|stücke|bunch|bunches|bund|clove|cloves|zehe|zehen|can|cans|dose|dosen|slice|slices|scheibe|scheiben|piece|pieces|bottle|bottles|flasche|flaschen|packung|packungen|becher|drop|drops|tropfen|inch|small|medium|large|große?|mittlere?|kleine?)\b\s*'
+    r'|'
+        r'\d+(?:[./\-\u2013\u2014]\d+)?\s*(?:[xX*]\s*)?'
+    r')'
+    r'(?:of\s+|von\s+|x\s+)?',
+    re.IGNORECASE
+)
+
+def clean_ingredient_name(raw: str) -> str:
+    """
+    Strips leading quantities, units, bullet points, preparation parentheticals,
+    and returns a clean, capitalized ingredient name.
+    """
+    if not raw:
+        return ""
+    s = raw.strip()
+    s = re.sub(r'^[-*+]\s+(?:\[[ xX]\]\s*)?', '', s)
+    s = re.sub(r'^~~(.*)~~$', r'\1', s).strip()
+    if ' category: ' in s:
+        s = s.rpartition(' category: ')[0].strip()
+    cleaned = QUANTITY_PREFIX_REGEX.sub('', s).strip()
+    if not cleaned:
+        cleaned = s
+    paren_match = re.search(r'\s*\([^)]*\)\s*$', cleaned)
+    if paren_match and paren_match.start() > 0:
+        base = cleaned[:paren_match.start()].strip()
+        if len(base) >= 2:
+            cleaned = base
+    cleaned = re.sub(r',.*$', '', cleaned).strip(' .-\t')
+    if cleaned:
+        cleaned = cleaned[0].upper() + cleaned[1:]
+    return cleaned
+
+def build_ingredient_suggestions(
+    recipe_contents: List[str],
+    shopping_contents: List[str]
+) -> List[Dict[str, Any]]:
+    """
+    Builds a unique list of known ingredients with clean names, categories, and occurrence counts
+    from given recipe and shopping list markdown contents.
+    """
+    from .recipe import parse_recipe
+    items_map: Dict[str, Dict[str, Any]] = {}
+
+    # 1. Process recipes
+    for content in recipe_contents:
+        if not content or not content.strip():
+            continue
+        try:
+            parsed = parse_recipe(content)
+            for ing in parsed.get("ingredients", []):
+                raw_text = ing.get("clean_name") or ing.get("text", "")
+                name = clean_ingredient_name(raw_text)
+                if not name or len(name) < 2:
+                    continue
+                cat = (ing.get("category") or "").strip()
+                key = name.lower()
+                if key not in items_map:
+                    items_map[key] = {"name": name, "category": cat, "count": 0}
+                items_map[key]["count"] += 1
+                if cat and cat.lower() not in ("other ingredients", "general", ""):
+                    items_map[key]["category"] = cat
+        except Exception:
+            pass
+
+    # 2. Process shopping lists (active and archived)
+    for content in shopping_contents:
+        if not content or not content.strip():
+            continue
+        try:
+            parsed = parse_shopping_list(content)
+            for it in parsed.get("items", []):
+                raw_text = it.get("text", "")
+                name = clean_ingredient_name(raw_text)
+                if not name or len(name) < 2:
+                    continue
+                cat = (it.get("saved_category") or it.get("category") or "").strip()
+                if cat.lower() in ("completed", "done", "general"):
+                    cat = ""
+                key = name.lower()
+                if key not in items_map:
+                    items_map[key] = {"name": name, "category": cat, "count": 0}
+                items_map[key]["count"] += 1
+                if cat:
+                    items_map[key]["category"] = cat
+        except Exception:
+            pass
+
+    # Normalize categories: default empty or generic to 'General'
+    for item in items_map.values():
+        if not item["category"] or item["category"].lower() in ("other ingredients", "completed", "done"):
+            item["category"] = "General"
+
+    # Sort primarily by frequency (descending) and secondarily alphabetically by name
+    return sorted(items_map.values(), key=lambda x: (-x["count"], x["name"].lower()))
+
+
