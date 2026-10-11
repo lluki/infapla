@@ -23,6 +23,7 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     storage = daemon.storage
     git_mgr = daemon.git_manager
     sandbox = daemon.sandbox
+    cfg = daemon.config
 
     @app.after_request
     def add_no_cache_headers(response):
@@ -261,7 +262,10 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
                 if item.get("dtend"):
                     item["dtend"] = item["dtend"].isoformat()
                 cleaned.append(item)
-            return jsonify({"events": cleaned})
+            return jsonify({
+                "events": cleaned,
+                "ics_url": cfg.calendar_ics_url
+            })
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -297,6 +301,21 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
             description=description
         )
         return jsonify({"success": True, "file": filename})
+
+    @app.route("/api/calendar/delete", methods=["POST"])
+    def delete_calendar():
+        data = request.get_json(force=True) or {}
+        uid = data.get("uid", "").strip() if data.get("uid") else None
+        filename = data.get("file") or data.get("filename") or data.get("source_file")
+        summary = data.get("summary", "").strip() if data.get("summary") else None
+
+        if not uid and not summary and not filename:
+            return jsonify({"error": "Event identifier (uid, summary, or file) required"}), 400
+
+        deleted = storage.delete_calendar_event(uid=uid, filename=filename, summary=summary)
+        if deleted:
+            return jsonify({"success": True})
+        return jsonify({"error": "Event not found"}), 404
 
     # Specialized: Recipe & Mealplan
     @app.route("/api/recipe", methods=["GET"])

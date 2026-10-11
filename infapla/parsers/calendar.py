@@ -1,8 +1,9 @@
 import re
 import uuid
+import hashlib
 import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 def unfold_ics_lines(raw_text: str) -> List[str]:
     """
@@ -88,6 +89,9 @@ def parse_ics_file(file_content: str, filename: str = "") -> List[Dict[str, Any]
                     dt_start.hour == 0 and dt_start.minute == 0 and dt_start.second == 0 and
                     (dt_end is None or (dt_end.hour == 0 and dt_end.minute == 0))
                 )
+                if not current_event["uid"]:
+                    seed = f"{filename}:{current_event['summary']}:{current_event['start_str']}"
+                    current_event["uid"] = f"event-{hashlib.sha256(seed.encode()).hexdigest()[:16]}"
                 events.append(current_event)
                 current_event = None
             continue
@@ -153,3 +157,59 @@ END:VEVENT
 END:VCALENDAR
 """
     return ics_content
+
+def delete_ics_event(
+    file_content: str,
+    uid: Optional[str] = None,
+    summary: Optional[str] = None,
+    filename: str = ""
+) -> Tuple[str, int]:
+    """
+    Removes VEVENT blocks matching `uid` or `summary` from `file_content`.
+    Returns (updated_ics_string, deleted_count).
+    """
+    newline = "\r\n" if "\r\n" in file_content else "\n"
+    lines = file_content.splitlines()
+
+    output_lines: List[str] = []
+    current_block: List[str] = []
+    in_vevent = False
+    deleted_count = 0
+
+    clean_uid = uid.strip() if uid else None
+    clean_summary = summary.strip().lower() if summary else None
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.upper() == "BEGIN:VEVENT":
+            in_vevent = True
+            current_block = [line]
+            continue
+
+        if in_vevent:
+            current_block.append(line)
+            if stripped.upper() == "END:VEVENT":
+                in_vevent = False
+                parsed = parse_ics_file(newline.join(current_block), filename=filename)
+                matched = False
+                if parsed:
+                    ev = parsed[0]
+                    if clean_uid and ev.get("uid") == clean_uid:
+                        matched = True
+                    elif not clean_uid and clean_summary and ev.get("summary", "").strip().lower() == clean_summary:
+                        matched = True
+                if matched:
+                    deleted_count += 1
+                else:
+                    output_lines.extend(current_block)
+                current_block = []
+        else:
+            output_lines.append(line)
+
+    if current_block:
+        output_lines.extend(current_block)
+
+    res = newline.join(output_lines)
+    if file_content.endswith(("\n", "\r\n")) and res and not res.endswith(("\n", "\r\n")):
+        res += newline
+    return res, deleted_count

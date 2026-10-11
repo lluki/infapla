@@ -23,6 +23,7 @@ from infapla.parsers.mealplan import parse_mealplan
 from infapla.parsers.calendar import (
     parse_ics_file,
     create_ics_event,
+    delete_ics_event,
     parse_ics_datetime,
     unfold_ics_lines
 )
@@ -269,6 +270,61 @@ class TestCalendarParser(unittest.TestCase):
         unfolded = unfold_ics_lines(folded)
         self.assertEqual(len(unfolded), 1)
         self.assertEqual(unfolded[0], "DESCRIPTION:This is a very long linethat was folded onto multiple lines")
+
+    def test_delete_ics_event_by_uid(self):
+        ics_text = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//InFaPla//EN
+BEGIN:VEVENT
+UID:event-1@infapla.local
+SUMMARY:First Event
+DTSTART:20261015T100000
+END:VEVENT
+BEGIN:VEVENT
+UID:event-2@infapla.local
+SUMMARY:Second Event
+DTSTART:20261015T120000
+END:VEVENT
+END:VCALENDAR
+"""
+        updated, count = delete_ics_event(ics_text, uid="event-1@infapla.local")
+        self.assertEqual(count, 1)
+        events = parse_ics_file(updated)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["uid"], "event-2@infapla.local")
+        self.assertEqual(events[0]["summary"], "Second Event")
+
+    def test_delete_ics_event_by_summary(self):
+        ics_text = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//InFaPla//EN
+BEGIN:VEVENT
+UID:event-1@infapla.local
+SUMMARY:Doctor Appointment
+DTSTART:20261015T100000
+END:VEVENT
+END:VCALENDAR
+"""
+        updated, count = delete_ics_event(ics_text, summary="Doctor Appointment")
+        self.assertEqual(count, 1)
+        events = parse_ics_file(updated)
+        self.assertEqual(len(events), 0)
+        self.assertIn("BEGIN:VCALENDAR", updated)
+        self.assertIn("END:VCALENDAR", updated)
+
+    def test_delete_ics_event_not_found(self):
+        ics_text = """BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:event-1@infapla.local
+SUMMARY:Doctor Appointment
+END:VEVENT
+END:VCALENDAR
+"""
+        updated, count = delete_ics_event(ics_text, uid="nonexistent@infapla.local")
+        self.assertEqual(count, 0)
+        events = parse_ics_file(updated)
+        self.assertEqual(len(events), 1)
 
 class TestIngredientSuggestions(unittest.TestCase):
     def test_clean_ingredient_name(self):

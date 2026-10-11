@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from .parsers.shopping import parse_shopping_list, add_shopping_item, toggle_shopping_item, remove_shopping_item, clear_completed_items, build_ingredient_suggestions
 from .parsers.recipe import parse_recipe
 from .parsers.todo import parse_todo_list, add_todo_item, toggle_todo_item, remove_todo_item
-from .parsers.calendar import parse_ics_file, create_ics_event
+from .parsers.calendar import parse_ics_file, create_ics_event, delete_ics_event
 from .parsers.mealplan import parse_mealplan
 
 class Storage:
@@ -417,3 +417,43 @@ class Storage:
         )
         target.write_text(ics_text, encoding="utf-8")
         return filename
+
+    def delete_calendar_event(
+        self,
+        uid: Optional[str] = None,
+        filename: Optional[str] = None,
+        summary: Optional[str] = None
+    ) -> bool:
+        cal_dir = self.data_dir / "calendar"
+        if not cal_dir.exists():
+            return False
+
+        target_files = []
+        if filename:
+            clean_name = Path(filename).name
+            target = cal_dir / clean_name
+            if target.exists() and target.is_file():
+                target_files.append(target)
+
+        # Fallback to check all calendar files if not found in specified file or if no file specified
+        all_cal_files = sorted([f for f in cal_dir.iterdir() if f.is_file() and f.suffix.lower() in (".ics", ".ical")])
+        for f in all_cal_files:
+            if f not in target_files:
+                target_files.append(f)
+
+        for f in target_files:
+            try:
+                content = f.read_text(encoding="utf-8", errors="replace")
+                new_content, count = delete_ics_event(content, uid=uid, summary=summary, filename=f.name)
+                if count > 0:
+                    remaining_events = parse_ics_file(new_content, filename=f.name)
+                    rel_p = f"calendar/{f.name}"
+                    if remaining_events or f.name == "family.ics":
+                        self.write_file(rel_p, new_content)
+                    else:
+                        self.delete_file(rel_p)
+                    return True
+            except Exception:
+                pass
+
+        return False

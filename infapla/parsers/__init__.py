@@ -15,7 +15,7 @@ from .todo import (
     add_todo_item,
     remove_todo_item,
 )
-from .calendar import parse_ics_file, create_ics_event
+from .calendar import parse_ics_file, create_ics_event, delete_ics_event
 from .mealplan import parse_mealplan
 
 __all__ = [
@@ -35,5 +35,6 @@ __all__ = [
     "remove_todo_item",
     "parse_ics_file",
     "create_ics_event",
+    "delete_ics_event",
     "parse_mealplan",
 ]

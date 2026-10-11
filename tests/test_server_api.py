@@ -170,6 +170,8 @@ class TestServerAPI(unittest.TestCase):
         # GET calendar
         res = self.client.get("/api/calendar")
         self.assertEqual(res.status_code, 200)
+        self.assertIn("ics_url", res.get_json())
+        self.assertTrue(res.get_json()["ics_url"].endswith(".ics"))
 
         # ADD calendar
         res_add = self.client.post("/api/calendar/add", json={
@@ -183,7 +185,44 @@ class TestServerAPI(unittest.TestCase):
         # GET calendar again
         res2 = self.client.get("/api/calendar")
         events = res2.get_json()["events"]
-        self.assertTrue(any("Parent Teacher Conference" in e["summary"] for e in events))
+        added_ev = next(e for e in events if "Parent Teacher Conference" in e["summary"])
+        self.assertTrue(added_ev)
+
+        # DELETE added calendar event
+        res_del = self.client.post("/api/calendar/delete", json={
+            "uid": added_ev["uid"],
+            "file": added_ev["source_file"]
+        })
+        self.assertEqual(res_del.status_code, 200)
+        self.assertTrue(res_del.get_json()["success"])
+
+        # Verify it's gone
+        res3 = self.client.get("/api/calendar")
+        events3 = res3.get_json()["events"]
+        self.assertFalse(any("Parent Teacher Conference" in e["summary"] for e in events3))
+
+        # DELETE event from family.ics
+        family_ev = next(e for e in events3 if e["source_file"] == "family.ics")
+        res_del_family = self.client.post("/api/calendar/delete", json={
+            "uid": family_ev["uid"],
+            "file": "family.ics"
+        })
+        self.assertEqual(res_del_family.status_code, 200)
+        self.assertTrue(res_del_family.get_json()["success"])
+
+        # Verify 0 events now, and family.ics still exists
+        res4 = self.client.get("/api/calendar")
+        self.assertEqual(len(res4.get_json()["events"]), 0)
+        res_file = self.client.get("/api/file?path=calendar/family.ics")
+        self.assertEqual(res_file.status_code, 200)
+
+        # DELETE non-existent event returns 404
+        res_404 = self.client.post("/api/calendar/delete", json={"uid": "nonexistent"})
+        self.assertEqual(res_404.status_code, 404)
+
+        # Empty body returns 400
+        res_400 = self.client.post("/api/calendar/delete", json={})
+        self.assertEqual(res_400.status_code, 400)
 
     def test_git_endpoints(self):
         res_status = self.client.get("/api/git/status")

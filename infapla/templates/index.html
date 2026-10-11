@@ -205,8 +205,9 @@
             <div class="card-content-preview" id="dash-cal-preview">
               Loading calendar events...
             </div>
-            <div class="card-footer">
+            <div class="card-footer" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button class="primary-btn" onclick="App.openCalendarView()">View Schedule →</button>
+              <button class="action-pill-btn" onclick="App.copyCalendarIcsUrl()" title="Copy calendar subscription (.ics) link for Google Calendar">📅 Copy ICS Link</button>
             </div>
           </div>
 
@@ -323,9 +324,12 @@
 
             <!-- Calendar Special View -->
             <div id="special-calendar-container" class="calendar-view-ui" style="display: none;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                 <h2>Upcoming Family Schedule</h2>
-                <button class="primary-btn" onclick="App.showAddEventModal()">+ Add Event</button>
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                  <button class="action-pill-btn" onclick="App.copyCalendarIcsUrl()" title="Copy calendar subscription (.ics) link for Google Calendar">🔗 Subscribe (ICS)</button>
+                  <button class="primary-btn" onclick="App.showAddEventModal()">+ Add Event</button>
+                </div>
               </div>
               <div class="events-list" id="special-calendar-events"></div>
             </div>

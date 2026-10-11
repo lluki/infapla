@@ -477,6 +477,7 @@ const App = {
     try {
       const cRes = await fetch('/api/calendar');
       const cData = await cRes.json();
+      if (cData.ics_url) this.state.calendarIcsUrl = cData.ics_url;
       const cCount = document.getElementById('dash-cal-count');
       const cPrev = document.getElementById('dash-cal-preview');
       const events = cData.events || [];
@@ -1879,6 +1880,7 @@ const App = {
     try {
       const res = await fetch('/api/calendar');
       const data = await res.json();
+      if (data.ics_url) this.state.calendarIcsUrl = data.ics_url;
       eventsDiv.innerHTML = '';
       const events = data.events || [];
 
@@ -1891,14 +1893,26 @@ const App = {
         const card = document.createElement('div');
         card.className = 'event-card';
         card.innerHTML = `
-          <div class="event-title">${ev.summary}</div>
-          <div class="event-details">
-            <span>🕒 ${ev.start_str || 'TBD'} ${ev.end_str ? ' - ' + ev.end_str : ''}</span>
-            ${ev.location ? `<span>📍 ${ev.location}</span>` : ''}
-            ${ev.source_file ? `<span style="color: var(--text-muted); font-size: 0.75rem;">(${ev.source_file})</span>` : ''}
+          <div class="event-card-header">
+            <div class="event-title">${this.escapeHtml(ev.summary || 'Untitled Event')}</div>
+            <button class="item-delete-btn event-delete-btn" title="Delete event" aria-label="Delete event">🗑</button>
           </div>
-          ${ev.description ? `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">${ev.description}</div>` : ''}
+          <div class="event-details">
+            <span>🕒 ${this.escapeHtml(ev.start_str || 'TBD')} ${ev.end_str ? ' - ' + this.escapeHtml(ev.end_str) : ''}</span>
+            ${ev.location ? `<span>📍 ${this.escapeHtml(ev.location)}</span>` : ''}
+            ${ev.source_file ? `<span style="color: var(--text-muted); font-size: 0.75rem;">(${this.escapeHtml(ev.source_file)})</span>` : ''}
+          </div>
+          ${ev.description ? `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">${this.escapeHtml(ev.description)}</div>` : ''}
         `;
+
+        const delBtn = card.querySelector('.event-delete-btn');
+        if (delBtn) {
+          delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.deleteCalendarEvent(ev);
+          });
+        }
+
         eventsDiv.appendChild(card);
       });
     } catch (e) {
@@ -1954,6 +1968,61 @@ const App = {
       }
     } catch (e) {
       this.showToast('Failed to add event', 'info');
+    }
+  },
+
+  async deleteCalendarEvent(ev) {
+    const title = ev.summary || 'this event';
+    if (!window.confirm(`Delete calendar event "${title}"?`)) return;
+
+    try {
+      const res = await fetch('/api/calendar/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uid: ev.uid,
+          file: ev.source_file,
+          summary: ev.summary
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        this.showToast(`Deleted event: ${title}`, 'success');
+        await this.loadSpecialCalendarUI();
+        this.loadDashboardData();
+        await this.loadFiles();
+        if (this.state.currentFilePath && (this.state.currentFilePath.startsWith('calendar/') || this.state.currentFilePath === ev.source_file)) {
+          const fileStillExists = this.state.files.some(f => f.path === this.state.currentFilePath);
+          if (fileStillExists) {
+            this.syncCurrentFileContent();
+          } else {
+            const fallbackCal = this.state.files.find(f => f.type === 'calendar');
+            if (fallbackCal) {
+              this.openFile(fallbackCal.path);
+            } else {
+              this.showOverview();
+            }
+          }
+        }
+      } else {
+        this.showToast(data.error || 'Failed to delete event', 'info');
+      }
+    } catch (e) {
+      this.showToast('Failed to delete event', 'info');
+    }
+  },
+
+  copyCalendarIcsUrl() {
+    const icsPath = this.state.calendarIcsUrl || '/cal/60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a/calendar.ics';
+    const fullUrl = window.location.origin + icsPath;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        this.showToast('Calendar .ics subscription URL copied to clipboard!', 'success');
+      }).catch(() => {
+        prompt('Copy calendar .ics subscription URL:', fullUrl);
+      });
+    } else {
+      prompt('Copy calendar .ics subscription URL:', fullUrl);
     }
   },
 

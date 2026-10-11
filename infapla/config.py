@@ -16,6 +16,7 @@ class Config:
     agy_bin: str = field(default_factory=lambda: os.environ.get("AGY_BIN", "agy"))
     agy_model: str = field(default_factory=lambda: os.environ.get("AGY_MODEL", "gemini-3.8-flash-low"))
     agy_effort: str = field(default_factory=lambda: os.environ.get("AGY_EFFORT", "low"))
+    calendar_ics_url: str = field(default_factory=lambda: os.environ.get("INFAPLA_CALENDAR_ICS_URL", "/cal/60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a/calendar.ics"))
     debug: bool = field(default_factory=lambda: os.environ.get("DEBUG", "0").lower() in ("1", "true", "yes"))
 
 default_config = Config()

@@ -1505,9 +1505,27 @@ body.modal-open {
   gap: 0.35rem;
 }
 
+.event-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .event-title {
   font-weight: 700;
   font-size: 1rem;
+}
+
+.event-delete-btn {
+  opacity: 0.75;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.event-card:hover .event-delete-btn {
+  opacity: 1;
 }
 
 .event-details {
