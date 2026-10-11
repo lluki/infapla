@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 from pathlib import Path
@@ -46,10 +47,15 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         return response
 
     @app.route("/manifest.webmanifest")
+    @app.route("/manifest.json")
     def web_manifest():
         response = send_from_directory(app.static_folder, "manifest.webmanifest")
         response.headers["Content-Type"] = "application/manifest+json"
         return response
+
+    @app.route("/icons/<path:filename>")
+    def icons_route(filename):
+        return send_from_directory(os.path.join(app.static_folder, "icons"), filename)
 
     @app.route("/api/info", methods=["GET"])
     def get_info():

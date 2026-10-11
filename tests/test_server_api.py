@@ -41,6 +41,16 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(data["short_name"], "InFaPla")
         self.assertEqual(data["display"], "standalone")
 
+        # Manifest JSON alias
+        res_man_json = self.client.get("/manifest.json")
+        self.assertEqual(res_man_json.status_code, 200)
+
+        # Icons
+        res_icon = self.client.get("/static/icons/icon-192.png")
+        self.assertEqual(res_icon.status_code, 200)
+        res_icon_alias = self.client.get("/icons/icon-192.png")
+        self.assertEqual(res_icon_alias.status_code, 200)
+
     def test_list_files(self):
         res = self.client.get("/api/files")
         self.assertEqual(res.status_code, 200)

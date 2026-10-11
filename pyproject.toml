@@ -19,4 +19,4 @@ infapla = "infapla.cli:main"
 packages = ["infapla", "infapla.parsers"]
 
 [tool.setuptools.package-data]
-infapla = ["templates/*", "static/css/*", "static/js/*"]
+infapla = ["templates/*", "templates/**/*", "static/*", "static/**/*"]
