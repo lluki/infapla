@@ -24,6 +24,22 @@ class TestServerAPI(unittest.TestCase):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
         self.assertIn(b"InFaPla", res.data)
+        self.assertIn(b"manifest.webmanifest", res.data)
+        self.assertIn(b"apple-touch-icon", res.data)
+
+    def test_pwa_routes(self):
+        # Service Worker
+        res_sw = self.client.get("/sw.js")
+        self.assertEqual(res_sw.status_code, 200)
+        self.assertIn("application/javascript", res_sw.headers["Content-Type"])
+
+        # Manifest
+        res_man = self.client.get("/manifest.webmanifest")
+        self.assertEqual(res_man.status_code, 200)
+        self.assertIn("manifest+json", res_man.headers["Content-Type"])
+        data = res_man.get_json()
+        self.assertEqual(data["short_name"], "InFaPla")
+        self.assertEqual(data["display"], "standalone")
 
     def test_list_files(self):
         res = self.client.get("/api/files")

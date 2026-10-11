@@ -2,7 +2,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory
 
 from .config import Config, default_config
 from .daemon import InFaPlaDaemon
@@ -36,6 +36,20 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     @app.route("/")
     def index():
         return render_template("index.html")
+
+    @app.route("/sw.js")
+    def service_worker():
+        response = send_from_directory(app.static_folder, "sw.js")
+        response.headers["Content-Type"] = "application/javascript"
+        response.headers["Service-Worker-Allowed"] = "./"
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
+
+    @app.route("/manifest.webmanifest")
+    def web_manifest():
+        response = send_from_directory(app.static_folder, "manifest.webmanifest")
+        response.headers["Content-Type"] = "application/manifest+json"
+        return response
 
     @app.route("/api/info", methods=["GET"])
     def get_info():

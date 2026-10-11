@@ -45,6 +45,15 @@ const App = {
   },
 
   init() {
+    // Register Service Worker for PWA installability
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((err) => {
+          console.warn('ServiceWorker registration error:', err);
+        });
+      });
+    }
+
     this.bindEvents();
     this.refreshAll();
 
