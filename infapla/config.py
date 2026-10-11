@@ -11,6 +11,7 @@ class Config:
     port: int = field(default_factory=lambda: int(os.environ.get("INFAPLA_PORT", "8080")))
     git_commit_interval: int = field(default_factory=lambda: int(os.environ.get("INFAPLA_GIT_INTERVAL", "30")))
     telegram_bot_token: str = field(default_factory=lambda: os.environ.get("TELEGRAM_BOT_TOKEN", "").strip())
+    telegram_allowed_users: list = field(default_factory=lambda: [u.strip().lstrip("@").lower() for u in os.environ.get("TELEGRAM_ALLOWED_USERS", "").split(",") if u.strip()])
     sandbox_script: Path = field(default_factory=lambda: Path(os.environ.get("INFAPLA_SANDBOX_SCRIPT", BASE_DIR / "run-agy-sandboxed.sh")).resolve())
     agy_bin: str = field(default_factory=lambda: os.environ.get("AGY_BIN", "agy"))
     agy_model: str = field(default_factory=lambda: os.environ.get("AGY_MODEL", "gemini-3.8-flash-low"))

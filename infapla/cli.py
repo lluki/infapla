@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--host", default=None, help="HTTP host (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=None, help="HTTP port (default: 8080)")
     parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
+    parser.add_argument("--telegram-allowed-users", default=None, help="Comma-separated list of allowed Telegram usernames or IDs")
     parser.add_argument("--git-interval", type=int, default=None, help="Git auto-commit interval in seconds (default: 30)")
     parser.add_argument("--model", default=None, help="agy model (default: gemini-3.8-flash-low)")
     parser.add_argument("--effort", default=None, help="agy reasoning effort: low|medium|high (default: low)")
@@ -33,6 +34,8 @@ def main():
         cfg.port = args.port
     if args.telegram_token:
         cfg.telegram_bot_token = args.telegram_token
+    if args.telegram_allowed_users:
+        cfg.telegram_allowed_users = [u.strip().lstrip("@").lower() for u in args.telegram_allowed_users.split(",") if u.strip()]
     if args.git_interval:
         cfg.git_commit_interval = args.git_interval
     if args.model:

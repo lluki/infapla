@@ -68,6 +68,12 @@ in {
       description = "Optional Telegram bot token.";
     };
 
+    telegramAllowedUsers = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Optional list of allowed Telegram usernames or IDs.";
+    };
+
     gitCommitInterval = mkOption {
       type = types.int;
       default = 30;
@@ -100,6 +106,8 @@ in {
         HOME = "/home/${cfg.user}";
       } // optionalAttrs (cfg.telegramBotToken != null) {
         TELEGRAM_BOT_TOKEN = cfg.telegramBotToken;
+      } // optionalAttrs (cfg.telegramAllowedUsers != [ ]) {
+        TELEGRAM_ALLOWED_USERS = lib.concatStringsSep "," cfg.telegramAllowedUsers;
       };
 
       script = ''

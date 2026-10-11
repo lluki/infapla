@@ -22,7 +22,12 @@ class InFaPlaDaemon:
         )
         self.git_manager = GitManager(self.config.data_dir)
         self.committer = PeriodicCommitter(self.git_manager, self.config.git_commit_interval)
-        self.telegram = TelegramBot(self.config.telegram_bot_token, self.storage, self.sandbox)
+        self.telegram = TelegramBot(
+            self.config.telegram_bot_token,
+            self.storage,
+            self.sandbox,
+            allowed_users=self.config.telegram_allowed_users
+        )
         self._is_running = False
 
     def start(self) -> None:

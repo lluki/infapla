@@ -124,5 +124,38 @@ class TestTelegramBot(unittest.TestCase):
         self.assertIn("calendar/", prompt_arg)
         self.assertIn("invitation", prompt_arg.lower())
 
+    def test_whitelist_allows_authorized_user(self):
+        bot = TelegramBot("dummy_token", self.storage, self.mock_sandbox, allowed_users=["Luki000"])
+        bot.send_message = MagicMock()
+        update = {
+            "update_id": 8,
+            "message": {
+                "chat": {"id": 12345},
+                "from": {"id": 999, "username": "Luki000"},
+                "text": "/shopping"
+            }
+        }
+        bot._handle_update(update)
+        bot.send_message.assert_called()
+        call_text = bot.send_message.call_args[0][1]
+        self.assertIn("Shopping", call_text)
+
+    def test_whitelist_blocks_unauthorized_user(self):
+        bot = TelegramBot("dummy_token", self.storage, self.mock_sandbox, allowed_users=["Luki000"])
+        bot.send_message = MagicMock()
+        update = {
+            "update_id": 9,
+            "message": {
+                "chat": {"id": 12345},
+                "from": {"id": 888, "username": "stranger"},
+                "text": "/shopping"
+            }
+        }
+        bot._handle_update(update)
+        bot.send_message.assert_called()
+        call_text = bot.send_message.call_args[0][1]
+        self.assertIn("Access Denied", call_text)
+
 if __name__ == "__main__":
     unittest.main()
+

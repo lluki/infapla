@@ -8,7 +8,7 @@ import threading
 import urllib.request
 import urllib.parse
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from .storage import Storage
 from .sandbox import SandboxRunner
@@ -18,14 +18,29 @@ logger = logging.getLogger("infapla.telegram")
 URL_REGEX = re.compile(r"https?://[^\s]+")
 
 class TelegramBot:
-    def __init__(self, token: str, storage: Storage, sandbox: SandboxRunner):
+    def __init__(self, token: str, storage: Storage, sandbox: SandboxRunner, allowed_users: Optional[List[str]] = None):
         self.token = token.strip()
         self.storage = storage
         self.sandbox = sandbox
+        self.allowed_users = set(u.strip().lstrip("@").lower() for u in (allowed_users or []) if u.strip())
         self.running = False
         self.thread: Optional[threading.Thread] = None
         self.base_url = f"https://api.telegram.org/bot{self.token}"
         self.sessions: Dict[int, Dict[str, Any]] = {}
+
+    def is_user_authorized(self, msg: Dict[str, Any]) -> bool:
+        if not self.allowed_users:
+            return True
+        from_user = msg.get("from") or {}
+        user_id = str(from_user.get("id") or "").strip()
+        username = (from_user.get("username") or "").strip().lstrip("@").lower()
+        chat_id = str(msg.get("chat", {}).get("id") or "").strip()
+
+        return (
+            (bool(user_id) and user_id in self.allowed_users)
+            or (bool(username) and username in self.allowed_users)
+            or (bool(chat_id) and chat_id in self.allowed_users)
+        )
 
     def is_configured(self) -> bool:
         return bool(self.token)
@@ -124,6 +139,16 @@ class TelegramBot:
 
         chat_id = msg.get("chat", {}).get("id")
         if not chat_id:
+            return
+
+        if not self.is_user_authorized(msg):
+            sender_id = msg.get("from", {}).get("username") or msg.get("from", {}).get("id") or "Unknown"
+            logger.warning(f"Unauthorized message attempt from {sender_id} (chat_id: {chat_id})")
+            self.send_message(
+                chat_id,
+                "⛔ *Access Denied:* You are not authorized to access this InFaPla instance.",
+                parse_mode="Markdown"
+            )
             return
 
         text = msg.get("text", "").strip()
