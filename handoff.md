@@ -49,12 +49,15 @@ InFaPla/
 ## 3. Current State & Recent Features
 
 ### A. Decluttered Web UI & Burger Menu
-- **Responsive Burger Menu Drawer**:
-  - Accessible via header button `☰` and editor toolbar `☰ Menu`.
+- **Single Burger Menu in App Header**:
+  - The burger drawer is now accessed solely via the topmost burger toggle button `☰` in the header (`.app-header`), removing duplicate "Interactive" and "☰ Menu" buttons from the editor toolbar.
   - **🤖 Open Assistant**: Top item. Opens the overview assistant or a dedicated modal assistant when viewing a file.
   - **View Mode Chooser**: "Interactive", "Visual", and "Raw" moved out of the editor content window into the burger menu. Opening a file automatically chooses Interactive if available (shopping, recipe, meal plan, todo, calendar), otherwise Visual.
   - **🗑️ Delete File**: Dedicated file removal action in the burger menu asking for confirmation before deleting via `/api/file/delete`.
   - **Navigation Shortcuts**: Quick jumps to Overview, Shopping List, Tasks, Calendar, and New File creation.
+- **Robust Relative Link Resolution**:
+  - Relative markdown links (such as `- [Palak Paneer](../recipes/palak-paneer.md)` from mealplans like `shopping/mealplan/2026-10-12.md` or general markdown docs) resolve cleanly relative to the active file's parent folder using path segment stack resolution.
+  - Links to subdirectories or extensionless folder paths properly trigger folder view (`App.openFolder`) vs file view (`App.openFile`).
 - **Decluttered File View & Mobile Full-Screen Modals**:
   - Removed embedded assistant card and mode tabs from the file view layout, maximizing editor screen real estate.
   - On mobile screens (`@media (max-width: 640px)`), all modal dialogs (Ingredient Picker, File AI Assistant, Calendar Add Event, Diff Viewer) expand to full-screen views (`100vw x 100dvh`) with native sheet feel and scrollable dialog bodies.

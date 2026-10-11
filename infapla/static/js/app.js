@@ -925,7 +925,7 @@ const App = {
       if (cleanHref.startsWith('http://') || cleanHref.startsWith('https://')) {
         return `<a href="${cleanHref}" target="_blank" rel="noopener noreferrer">${label}</a>`;
       }
-      const relPath = this.normalizeFilePath(cleanHref);
+      const relPath = this.normalizeFilePath(cleanHref, this.state.currentFilePath);
       return `<a href="javascript:App.handleLinkClick('${relPath}')">${label}</a>`;
     });
 
@@ -938,7 +938,7 @@ const App = {
     return html;
   },
 
-  normalizeFilePath(rawPath) {
+  normalizeFilePath(rawPath, baseContextPath = null) {
     if (!rawPath) return '';
     let p = String(rawPath).trim();
 
@@ -976,15 +976,69 @@ const App = {
       }
     }
 
-    // Strip relative dots and leading slashes
-    p = p.replace(/^\.?\/?\.\.\//, '').replace(/^\.\//, '').replace(/^\/+/, '');
+    const resolveSegments = (str) => {
+      const parts = str.split('/');
+      const stack = [];
+      for (const seg of parts) {
+        if (!seg || seg === '.') continue;
+        if (seg === '..') {
+          if (stack.length > 0) stack.pop();
+        } else {
+          stack.push(seg);
+        }
+      }
+      return stack.join('/');
+    };
 
-    // Second pass in case data/ was still left
-    if (p.startsWith('data/')) {
-      p = p.substring(5);
+    // Determine base directory from baseContextPath or current state
+    let baseDir = '';
+    const base = baseContextPath !== null ? baseContextPath : (this.state.currentFilePath || this.state.currentFolderPath || '');
+    if (base) {
+      if (baseContextPath === null && this.state.currentFolderPath && !this.state.currentFilePath) {
+        baseDir = base.replace(/^\/+/, '').replace(/\/+$/, '');
+      } else {
+        const parts = base.replace(/^\/+/, '').split('/');
+        parts.pop(); // remove file name
+        baseDir = parts.join('/');
+      }
     }
 
-    return p;
+    // If p begins with / (root relative in repo/data)
+    if (p.startsWith('/')) {
+      return resolveSegments(p.replace(/^\/+/, ''));
+    }
+
+    // If explicitly relative with ./ or ../
+    if (p.startsWith('./') || p.startsWith('../')) {
+      const combined = baseDir ? `${baseDir}/${p}` : p;
+      return resolveSegments(combined);
+    }
+
+    // If p matches an existing file path exactly, it is already a clean repo path
+    if (this.state.files && this.state.files.some(f => f.path === p)) {
+      return p;
+    }
+
+    // If resolving against baseDir matches an existing file path
+    if (baseDir) {
+      const candidate = resolveSegments(`${baseDir}/${p}`);
+      if (this.state.files && this.state.files.some(f => f.path === candidate)) {
+        return candidate;
+      }
+    }
+
+    // If p contains segments with .. or .
+    if (p.includes('/.') || p.includes('./') || p.includes('..')) {
+      const combined = baseDir ? `${baseDir}/${p}` : p;
+      return resolveSegments(combined);
+    }
+
+    // If baseDir exists and p doesn't have slashes, resolve relative to baseDir
+    if (baseDir && !p.includes('/')) {
+      return resolveSegments(`${baseDir}/${p}`);
+    }
+
+    return resolveSegments(p);
   },
 
   handleLinkClick(href) {
@@ -996,8 +1050,12 @@ const App = {
     const cleanPath = this.normalizeFilePath(href);
     if (!cleanPath) return;
 
-    // If it's a directory (or ends with slash), open folder view
-    if (cleanPath.endsWith('/') || (!cleanPath.includes('.') && !cleanPath.includes('/'))) {
+    // Check if cleanPath represents a folder
+    const isFolder = cleanPath.endsWith('/') ||
+      (this.state.files && this.state.files.some(f => f.path.startsWith(cleanPath + '/')) && !this.state.files.some(f => f.path === cleanPath)) ||
+      (!cleanPath.includes('.') && (!this.state.files || !this.state.files.some(f => f.path === cleanPath)));
+
+    if (isFolder) {
       this.openFolder(cleanPath.replace(/\/+$/, ''));
     } else {
       this.openFile(cleanPath);
@@ -1632,7 +1690,7 @@ const App = {
           <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
             ${(d.meals || []).map(m => `
               <div>
-                <strong>${m.recipe_link ? `<a href="javascript:App.handleLinkClick('${m.recipe_link}')">${m.dish}</a>` : m.dish}</strong>
+                <strong>${m.recipe_link ? `<a href="javascript:App.handleLinkClick('${this.normalizeFilePath(m.recipe_link, path)}')">${m.dish}</a>` : m.dish}</strong>
                 ${m.hints ? `<div style="font-size: 0.8rem; color: var(--text-muted);">${m.hints}</div>` : ''}
               </div>
             `).join('')}
