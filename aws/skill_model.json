@@ -1,0 +1,44 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "family planner",
+      "intents": [
+        {
+          "name": "AddShoppingItemIntent",
+          "slots": [
+            {
+              "name": "items",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "add {items} to shopping list",
+            "add {items} to the shopping list",
+            "add {items} to my shopping list",
+            "add {items} to groceries",
+            "put {items} on the shopping list",
+            "add {items}",
+            "buy {items}"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        }
+      ],
+      "types": []
+    }
+  }
+}

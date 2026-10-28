@@ -16,6 +16,11 @@ def main():
     parser.add_argument("--git-interval", type=int, default=None, help="Git auto-commit interval in seconds (default: 30)")
     parser.add_argument("--model", default=None, help="agy model (default: gemini-3.8-flash-low)")
     parser.add_argument("--effort", default=None, help="agy reasoning effort: low|medium|high (default: low)")
+    parser.add_argument("--alexa-interval", type=int, default=None, help="Alexa shopping list sync interval in seconds (default: 60)")
+    parser.add_argument("--alexa-table", default=None, help="AWS DynamoDB table name for Alexa shopping items")
+    parser.add_argument("--alexa-url", default=None, help="AWS Lambda Function URL / API Gateway endpoint for Alexa sync")
+    parser.add_argument("--alexa-secret", default=None, help="Secret token / API key for Alexa sync HTTP endpoint")
+    parser.add_argument("--aws-region", default=None, help="AWS region for DynamoDB (default: us-east-1)")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     args = parser.parse_args()
@@ -42,6 +47,16 @@ def main():
         cfg.agy_model = args.model
     if args.effort:
         cfg.agy_effort = args.effort
+    if args.alexa_interval:
+        cfg.alexa_sync_interval = args.alexa_interval
+    if args.alexa_table:
+        cfg.alexa_dynamodb_table = args.alexa_table
+    if args.alexa_url:
+        cfg.alexa_sync_url = args.alexa_url
+    if args.alexa_secret:
+        cfg.alexa_sync_secret = args.alexa_secret
+    if args.aws_region:
+        cfg.aws_region = args.aws_region
     if args.debug:
         cfg.debug = True
 

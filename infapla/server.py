@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, jsonify, Response, stream_wit
 from .config import Config, default_config
 from .daemon import InFaPlaDaemon
 from .parsers.shopping import GROUP_CATEGORIES_PROMPT, MERGE_DUPLICATES_PROMPT
+from .alexa_sync import handle_alexa_skill_webhook
 
 logger = logging.getLogger("infapla.server")
 
@@ -517,6 +518,38 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
             "result": result,
             "shopping_data": updated_data
         })
+
+    @app.route("/api/alexa/status", methods=["GET"])
+    def alexa_status():
+        return jsonify(daemon.alexa_sync.get_status())
+
+    @app.route("/api/alexa/sync", methods=["POST"])
+    def alexa_sync_trigger():
+        result = daemon.alexa_sync.sync_once()
+        shopping_data = storage.get_shopping_data()
+        return jsonify({
+            "sync_result": result,
+            "shopping_data": shopping_data
+        })
+
+    @app.route("/api/alexa/skill", methods=["GET", "POST"])
+    @app.route("/api/alexa", methods=["GET", "POST"])
+    @app.route("/alexa", methods=["GET", "POST"])
+    def alexa_skill_webhook():
+        if request.method == "GET":
+            return jsonify({
+                "status": "ok",
+                "message": "Hello Hello, this is the infamous family planner",
+                "service": "infapla"
+            }), 200
+        event = request.get_json(force=True, silent=True) or {}
+        resp_data, status_code = handle_alexa_skill_webhook(
+            event=event,
+            storage=storage,
+            sandbox=sandbox,
+            expected_skill_id=cfg.alexa_skill_id
+        )
+        return jsonify(resp_data), status_code
 
     return app
 

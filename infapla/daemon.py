@@ -7,6 +7,7 @@ from .storage import Storage
 from .git_manager import GitManager, PeriodicCommitter
 from .sandbox import SandboxRunner
 from .telegram_bot import TelegramBot
+from .alexa_sync import AlexaSyncService
 
 logger = logging.getLogger("infapla.daemon")
 
@@ -28,6 +29,11 @@ class InFaPlaDaemon:
             self.sandbox,
             allowed_users=self.config.telegram_allowed_users
         )
+        self.alexa_sync = AlexaSyncService(
+            config=self.config,
+            storage=self.storage,
+            sandbox=self.sandbox
+        )
         self._is_running = False
 
     def start(self) -> None:
@@ -45,12 +51,19 @@ class InFaPlaDaemon:
         else:
             logger.info("Telegram bot not configured (set TELEGRAM_BOT_TOKEN to enable).")
 
+        # Start Alexa shopping sync if configured
+        if self.alexa_sync.is_configured():
+            self.alexa_sync.start()
+        else:
+            logger.info("Alexa shopping sync not configured (set ALEXA_DYNAMODB_TABLE or ALEXA_SYNC_URL to enable).")
+
     def stop(self) -> None:
         if not self._is_running:
             return
         logger.info("Stopping InFaPla background daemon...")
         self.committer.stop()
         self.telegram.stop()
+        self.alexa_sync.stop()
         self._is_running = False
 
     def is_running(self) -> bool:
