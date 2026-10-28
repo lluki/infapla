@@ -293,7 +293,7 @@ class TestAlexaSync(unittest.TestCase):
         res_launch = client.post("/api/alexa/skill", json=launch_payload)
         self.assertEqual(res_launch.status_code, 200)
         data = res_launch.get_json()
-        self.assertIn("Hello Hello, this is the infamous family planner", data["response"]["outputSpeech"]["text"])
+        self.assertRegex(data["response"]["outputSpeech"]["text"], r"Hello Maya, you should snip \d+ times")
         self.assertTrue(data["response"]["shouldEndSession"])
 
         # 2. Test AddShoppingItemIntent

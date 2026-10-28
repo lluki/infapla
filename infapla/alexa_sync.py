@@ -1,6 +1,7 @@
 import re
 import json
 import time
+import random
 import logging
 import threading
 import urllib.request
@@ -536,9 +537,12 @@ def handle_alexa_skill_webhook(
             }
         return resp
 
+    times = random.randint(1, 10)
+    maya_speech = f"Hello Maya, you should snip {times} times"
+
     if req_type == "LaunchRequest":
         return build_ask_response(
-            speech="Hello Hello, this is the infamous family planner",
+            speech=maya_speech,
             should_end=True
         ), 200
 
@@ -591,11 +595,11 @@ def handle_alexa_skill_webhook(
 
         elif intent_name in ("AMAZON.HelpIntent", "AMAZON.CancelIntent", "AMAZON.StopIntent"):
             return build_ask_response(
-                speech="Hello Hello, this is the infamous family planner",
+                speech=maya_speech,
                 should_end=True
             ), 200
 
     elif req_type == "SessionEndedRequest":
         return build_ask_response(speech="", should_end=True), 200
 
-    return build_ask_response(speech="Hello Hello, this is the infamous family planner", should_end=True), 200
+    return build_ask_response(speech=maya_speech, should_end=True), 200

@@ -537,9 +537,11 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     @app.route("/alexa", methods=["GET", "POST"])
     def alexa_skill_webhook():
         if request.method == "GET":
+            import random
+            x = random.randint(1, 10)
             return jsonify({
                 "status": "ok",
-                "message": "Hello Hello, this is the infamous family planner",
+                "message": f"Hello Maya, you should snip {x} times",
                 "service": "infapla"
             }), 200
         event = request.get_json(force=True, silent=True) or {}
