@@ -666,7 +666,17 @@ class AlexaLoginProxy:
                 clean_domain = f"amazon.{clean_domain}"
 
             cj = http.cookiejar.CookieJar()
-            lang = "de" if "de" in clean_domain else ("uk" if "co.uk" in clean_domain else "us")
+            
+            # Map clean domain to Amazon's exact assoc_handle
+            handle_map = {
+                "amazon.com": "amzn_dp_project_dee",
+                "amazon.de": "amzn_dp_project_dee_de",
+                "amazon.co.uk": "amzn_dp_project_dee_uk",
+                "amazon.fr": "amzn_dp_project_dee_fr",
+                "amazon.it": "amzn_dp_project_dee_it",
+                "amazon.es": "amzn_dp_project_dee_es",
+            }
+            assoc_handle = handle_map.get(clean_domain, "amzn_dp_project_dee")
 
             # Official Amazon signin URL for Alexa OAuth / web login
             start_url = (
@@ -674,7 +684,7 @@ class AlexaLoginProxy:
                 f"showRmrMe=1&"
                 f"openid.return_to=https%3A%2F%2Falexa.{clean_domain}%2Flogin&"
                 f"openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&"
-                f"openid.assoc_handle=amzn_dp_project_dee_{lang}&"
+                f"openid.assoc_handle={assoc_handle}&"
                 f"openid.mode=checkid_setup&"
                 f"openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&"
                 f"openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&"
@@ -687,11 +697,32 @@ class AlexaLoginProxy:
                 "status": "pending",
                 "error": None
             }
+            logger.info(f"[Alexa Proxy] Created login session {sid[:8]} for domain {clean_domain} (assoc_handle={assoc_handle})")
             return sid, start_url
 
     def get_session(self, sid: str) -> Optional[Dict[str, Any]]:
         with self.lock:
             return self.sessions.get(sid)
+
+    def _has_authenticated_cookies(self, cookie_jar: http.cookiejar.CookieJar) -> bool:
+        cookie_names = set(c.name for c in cookie_jar)
+        # Real authentication tokens set by Amazon after user credentials verified:
+        if any(k in cookie_names for k in ("at-main", "sess-at-main", "x-main")):
+            return True
+        if "ubid-main" in cookie_names and "session-token" in cookie_names:
+            return True
+        return False
+
+    def _is_completion_url(self, url: str, domain: str) -> bool:
+        parsed = urllib.parse.urlparse(url)
+        netloc = parsed.netloc.lower()
+        path = parsed.path.lower()
+        # Completion is reached when the user's browser arrives on alexa.{domain} (not www.amazon.{domain}), or /ap/maplanding
+        if netloc == f"alexa.{domain}" and (path.startswith("/spa") or path.startswith("/login") or path == "/"):
+            return True
+        if path == "/ap/maplanding":
+            return True
+        return False
 
     def _extract_cookie_str(self, cookie_jar: http.cookiejar.CookieJar) -> str:
         return "; ".join(f"{c.name}={c.value}" for c in cookie_jar)
@@ -802,7 +833,7 @@ class AlexaLoginProxy:
                 logger.info(f"[Alexa Proxy] Redirect to: {resolved_loc}")
 
                 # Check if this redirect is toward completion (alexa login or maplanding)
-                if f"alexa.{domain}" in resolved_loc or "/ap/maplanding" in resolved_loc or "/spa/index.html" in resolved_loc:
+                if self._is_completion_url(resolved_loc, domain):
                     logger.info(f"[Alexa Proxy] Completion redirect detected: {resolved_loc}")
                     # Follow completion endpoint to allow Alexa to set CSRF and session cookies
                     try:
@@ -820,8 +851,7 @@ class AlexaLoginProxy:
                     except Exception as ce:
                         logger.warning(f"[Alexa Proxy] Exception visiting completion target: {ce}")
 
-                    has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
-                    if has_auth_cookies:
+                    if self._has_authenticated_cookies(cj):
                         cookie_str = self._extract_cookie_str(cj)
                         csrf = self._extract_csrf(cj, domain)
                         save_session_data(self.data_dir, cookie_str, csrf, domain)
@@ -833,18 +863,14 @@ class AlexaLoginProxy:
                                 logger.error(f"[Alexa Proxy] Callback error on login success: {cb_err}")
                         logger.info(f"[Alexa Proxy] *** LOGIN SUCCESSFUL! *** Saved session for domain={domain}, csrf={csrf[:10] if csrf else 'none'}...")
                         return 302, {"Location": success_loc}, b""
+                    else:
+                        logger.warning(f"[Alexa Proxy] Reached completion target but missing authenticated cookies: {[c.name for c in cj]}")
 
                 proxy_loc = f"{proxy_path}?sid={sid}&url={urllib.parse.quote(resolved_loc)}"
                 return 302, {"Location": proxy_loc}, b""
 
         # Check if 200 response on completion target with auth cookies
-        is_completion_target = (
-            f"alexa.{domain}" in target_url
-            or "/ap/maplanding" in target_url
-            or "/spa/index.html" in target_url
-        )
-        has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
-        if is_completion_target and has_auth_cookies:
+        if self._is_completion_url(target_url, domain) and self._has_authenticated_cookies(cj):
             cookie_str = self._extract_cookie_str(cj)
             csrf = self._extract_csrf(cj, domain)
             save_session_data(self.data_dir, cookie_str, csrf, domain)
