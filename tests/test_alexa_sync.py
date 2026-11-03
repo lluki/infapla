@@ -466,6 +466,11 @@ class TestAlexaSync(unittest.TestCase):
             self.assertEqual(res_start.status_code, 302)
             self.assertIn("proxy?sid=", res_start.headers["Location"])
 
+            # 4b. Test GET /api/alexa/login/start with dynamic reverse-proxy prefix
+            res_start_pre = client.get("/api/alexa/login/start?domain=amazon.com&prefix=/infapla")
+            self.assertEqual(res_start_pre.status_code, 302)
+            self.assertIn("/infapla/api/alexa/login/proxy?sid=", res_start_pre.headers["Location"])
+
             # 5. Test GET /api/alexa/login/success
             res_success = client.get("/api/alexa/login/success")
             self.assertEqual(res_success.status_code, 200)

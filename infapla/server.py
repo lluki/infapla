@@ -577,11 +577,25 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     @app.route("/api/alexa/login/start", methods=["GET"])
     def alexa_login_start():
         domain = request.args.get("domain", "amazon.de").strip()
-        sid, start_url = daemon.alexa_login_proxy.create_session(domain=domain)
-        # Build proxy URL relative to current start endpoint
-        proxy_path = f"{request.path.rsplit('/', 1)[0]}/proxy"
-        proxy_url = f"{proxy_path}?sid={sid}&url={urllib.parse.quote(start_url)}"
-        logger.info(f"[Server] Alexa login start: domain={domain}, sid={sid[:8]}, proxy_url={proxy_url}")
+        prefix = request.args.get("prefix", "").strip()
+        if not prefix:
+            prefix = request.headers.get("X-Forwarded-Prefix", "").strip()
+        if not prefix and request.headers.get("Referer"):
+            ref_path = urllib.parse.urlparse(request.headers.get("Referer")).path
+            if "/infapla" in ref_path:
+                prefix = "/infapla"
+
+        clean_prefix = f"/{prefix.strip('/')}" if prefix and prefix.strip('/') else ""
+        sid, start_url = daemon.alexa_login_proxy.create_session(domain=domain, prefix=clean_prefix)
+
+        # Build dynamic proxy redirect URL
+        if clean_prefix:
+            proxy_url = f"{clean_prefix}/api/alexa/login/proxy?sid={sid}&url={urllib.parse.quote(start_url)}"
+        else:
+            # Relative redirect when no prefix is specified (browser replaces start with proxy)
+            proxy_url = f"proxy?sid={sid}&url={urllib.parse.quote(start_url)}"
+
+        logger.info(f"[Server] Alexa login start: domain={domain}, prefix={clean_prefix}, sid={sid[:8]}, proxy_url={proxy_url}")
         return redirect(proxy_url)
 
     @app.route("/api/alexa/login/proxy", methods=["GET", "POST"])
@@ -595,9 +609,18 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         method = request.method
         req_headers = dict(request.headers)
         body_data = request.get_data() if method.upper() == "POST" else None
-        current_proxy_path = request.path
 
-        logger.info(f"[Server] Alexa proxy incoming: {method} {target_url} (sid={sid[:8]}, body={len(body_data) if body_data else 0}b)")
+        sess = daemon.alexa_login_proxy.get_session(sid)
+        prefix = request.args.get("prefix", "").strip() or (sess.get("prefix", "") if sess else "") or request.headers.get("X-Forwarded-Prefix", "").strip()
+        if not prefix and request.headers.get("Referer"):
+            ref_path = urllib.parse.urlparse(request.headers.get("Referer")).path
+            if "/infapla" in ref_path:
+                prefix = "/infapla"
+
+        clean_prefix = f"/{prefix.strip('/')}" if prefix and prefix.strip('/') else ""
+        current_proxy_path = f"{clean_prefix}/api/alexa/login/proxy" if clean_prefix else "/api/alexa/login/proxy"
+
+        logger.info(f"[Server] Alexa proxy incoming: {method} {target_url} (sid={sid[:8]}, prefix={clean_prefix}, body={len(body_data) if body_data else 0}b)")
 
         status_code, resp_headers, body = daemon.alexa_login_proxy.proxy_request(
             sid=sid,

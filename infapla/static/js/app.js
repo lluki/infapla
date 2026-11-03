@@ -3207,7 +3207,8 @@ const App = {
     const height = 750;
     const left = Math.max(0, (window.screen.width - width) / 2);
     const top = Math.max(0, (window.screen.height - height) / 2);
-    const url = this.apiUrl(`api/alexa/login/start?domain=${encodeURIComponent(domain)}`);
+    const prefix = getAppRoot();
+    const url = this.apiUrl(`api/alexa/login/start?domain=${encodeURIComponent(domain)}&prefix=${encodeURIComponent(prefix)}`);
 
     this.showToast('Opening Amazon login window...', 'info');
     const popup = window.open(

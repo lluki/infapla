@@ -767,7 +767,7 @@ class AlexaLoginProxy:
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.lock = threading.Lock()
 
-    def create_session(self, domain: str = "amazon.de") -> Tuple[str, str]:
+    def create_session(self, domain: str = "amazon.de", prefix: str = "") -> Tuple[str, str]:
         with self.lock:
             # Clean up sessions older than 20 minutes
             now = time.time()
@@ -812,11 +812,12 @@ class AlexaLoginProxy:
             self.sessions[sid] = {
                 "created_at": now,
                 "domain": clean_domain,
+                "prefix": prefix,
                 "cookie_jar": cj,
                 "status": "pending",
                 "error": None
             }
-            logger.info(f"[Alexa Proxy] Created login session {sid[:8]} for domain {clean_domain} (assoc_handle={assoc_handle})")
+            logger.info(f"[Alexa Proxy] Created login session {sid[:8]} for domain {clean_domain} (prefix={prefix}, assoc_handle={assoc_handle})")
             return sid, start_url
 
     def get_session(self, sid: str) -> Optional[Dict[str, Any]]:
@@ -896,6 +897,9 @@ class AlexaLoginProxy:
 
         cj = sess["cookie_jar"]
         domain = sess["domain"]
+        prefix = sess.get("prefix", "")
+        if prefix and not proxy_path.startswith(prefix):
+            proxy_path = f"{prefix.rstrip('/')}/api/alexa/login/proxy"
 
         # Parse target URL
         parsed_target = urllib.parse.urlparse(target_url)
@@ -1036,6 +1040,9 @@ class AlexaLoginProxy:
                     var currentUrl = "{target_url}";
                     var baseHost = "{base_host}";
                     var proxyPath = "{proxy_path}";
+                    if (window.location.pathname.indexOf("login/proxy") !== -1) {{
+                        proxyPath = window.location.pathname;
+                    }}
 
                     console.log("[InFaPla Proxy] Login helper initialized for sid:", sid);
 
