@@ -803,9 +803,9 @@ class AlexaLoginProxy:
                             self.on_success_callback()
                         except Exception as cb_err:
                             logger.error(f"Callback on alexa login success failed: {cb_err}")
-                    return 302, {"Location": "/api/alexa/login/success"}, b""
+                    return 302, {"Location": "success"}, b""
 
-                proxy_loc = f"/api/alexa/login/proxy?sid={sid}&url={urllib.parse.quote(resolved_loc)}"
+                proxy_loc = f"proxy?sid={sid}&url={urllib.parse.quote(resolved_loc)}"
                 return 302, {"Location": proxy_loc}, b""
 
         # Check if 200 response on completion target with auth cookies
@@ -820,7 +820,7 @@ class AlexaLoginProxy:
                     self.on_success_callback()
                 except Exception as cb_err:
                     logger.error(f"Callback on alexa login success failed: {cb_err}")
-            return 302, {"Location": "/api/alexa/login/success"}, b""
+            return 302, {"Location": "success"}, b""
 
         # Handle HTML response
         content_type = resp_headers.get("Content-Type", "").lower()
@@ -840,7 +840,7 @@ class AlexaLoginProxy:
                     full = match.group(0)
                     action = match.group(1)
                     resolved = urllib.parse.urljoin(target_url, action)
-                    new_action = f"/api/alexa/login/proxy?sid={sid}&url={urllib.parse.quote(resolved)}"
+                    new_action = f"proxy?sid={sid}&url={urllib.parse.quote(resolved)}"
                     return full.replace(action, new_action)
 
                 html_text = re.sub(r'<form\b[^>]*action=[\"\']([^\"\']*)[\"\'][^>]*>', rewrite_form_action, html_text)
@@ -852,22 +852,23 @@ class AlexaLoginProxy:
                     var sid = "{sid}";
                     var currentUrl = "{target_url}";
                     var baseHost = "{base_host}";
+                    var proxyBase = window.location.origin + window.location.pathname;
 
                     document.addEventListener("submit", function(e) {{
                         var form = e.target;
                         var act = form.getAttribute("action") || "";
-                        if (!act.includes("/api/alexa/login/proxy")) {{
+                        if (!act.includes("login/proxy")) {{
                             var resolved = new URL(act, baseHost).href;
-                            form.action = "/api/alexa/login/proxy?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(resolved);
+                            form.action = proxyBase + "?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(resolved);
                         }}
                     }}, true);
 
                     document.addEventListener("click", function(e) {{
                         var a = e.target.closest("a");
                         if (a && a.href && !a.href.startsWith("javascript:") && !a.href.startsWith("#")) {{
-                            if (!a.href.includes("/api/alexa/login/proxy")) {{
+                            if (!a.href.includes("login/proxy")) {{
                                 e.preventDefault();
-                                window.location.href = "/api/alexa/login/proxy?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(a.href);
+                                window.location.href = proxyBase + "?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(a.href);
                             }}
                         }}
                     }}, true);

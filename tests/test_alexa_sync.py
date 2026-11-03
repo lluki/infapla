@@ -405,7 +405,7 @@ class TestAlexaSync(unittest.TestCase):
             # 4. Test GET /api/alexa/login/start (redirects to proxy)
             res_start = client.get("/api/alexa/login/start?domain=amazon.de")
             self.assertEqual(res_start.status_code, 302)
-            self.assertIn("/api/alexa/login/proxy?sid=", res_start.headers["Location"])
+            self.assertIn("proxy?sid=", res_start.headers["Location"])
 
             # 5. Test GET /api/alexa/login/success
             res_success = client.get("/api/alexa/login/success")

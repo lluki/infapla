@@ -1,12 +1,19 @@
 // InFaPla - Frontend Application Controller
-// Ensure fetch('/api/...') is routed relative to the app base path (e.g. /infapla/)
+// Ensure API requests and links are routed relative to the app base path (e.g. /infapla/)
+function getAppRoot() {
+  let p = window.location.pathname;
+  if (!p || p === '/') return '/';
+  if (p.endsWith('/')) return p;
+  if (/\/[^/]+\.[^/]+$/.test(p)) {
+    return p.replace(/\/[^/]+$/, '/');
+  }
+  return p + '/';
+}
+
 const _origFetch = window.fetch;
 window.fetch = function(resource, init) {
   if (typeof resource === 'string' && resource.startsWith('/api/')) {
-    const root = window.location.pathname.endsWith('/')
-      ? window.location.pathname
-      : window.location.pathname.replace(/\/[^\/]*$/, '/');
-    resource = root + resource.slice(1);
+    resource = getAppRoot() + resource.slice(1);
   }
   return _origFetch.call(this, resource, init);
 };
@@ -2059,15 +2066,7 @@ const App = {
 
   copyCalendarIcsUrl() {
     let icsPath = (this.state.calendarIcsUrl || 'cal/60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a/calendar.ics').replace(/^\/+/, '');
-    // Ensure reverse proxy base path of the app (e.g. /infapla/) is respected
-    let basePath = window.location.pathname;
-    if (basePath.includes('.')) {
-      basePath = basePath.replace(/\/[^\/]*$/, '/');
-    }
-    if (!basePath.endsWith('/')) {
-      basePath += '/';
-    }
-    const fullUrl = window.location.origin + basePath + icsPath;
+    const fullUrl = window.location.origin + this.apiUrl(icsPath);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(fullUrl).then(() => {
         this.showToast('Calendar .ics subscription URL copied to clipboard!', 'success');
@@ -3190,6 +3189,10 @@ const App = {
     }
   },
 
+  apiUrl(endpoint) {
+    return getAppRoot() + endpoint.replace(/^\/+/, '');
+  },
+
   startAlexaLogin() {
     const domainSelect = document.getElementById('alexa-login-domain');
     const domain = domainSelect ? domainSelect.value : 'amazon.de';
@@ -3197,7 +3200,7 @@ const App = {
     const height = 750;
     const left = Math.max(0, (window.screen.width - width) / 2);
     const top = Math.max(0, (window.screen.height - height) / 2);
-    const url = `/api/alexa/login/start?domain=${encodeURIComponent(domain)}`;
+    const url = this.apiUrl(`api/alexa/login/start?domain=${encodeURIComponent(domain)}`);
 
     this.showToast('Opening Amazon login window...', 'info');
     const popup = window.open(

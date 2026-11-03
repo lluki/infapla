@@ -566,7 +566,7 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     def alexa_login_start():
         domain = request.args.get("domain", "amazon.de").strip()
         sid, start_url = daemon.alexa_login_proxy.create_session(domain=domain)
-        proxy_url = f"/api/alexa/login/proxy?sid={sid}&url={urllib.parse.quote(start_url)}"
+        proxy_url = f"proxy?sid={sid}&url={urllib.parse.quote(start_url)}"
         return redirect(proxy_url)
 
     @app.route("/api/alexa/login/proxy", methods=["GET", "POST"])
