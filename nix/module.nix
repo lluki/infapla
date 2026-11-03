@@ -91,6 +91,12 @@ in {
       default = "cal/60809c9cfb92adb9fe7693b32e23d9e8892925afada35d4a/calendar.ics";
       description = "Radicale calendar ICS feed URL path.";
     };
+
+    alexaSync = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Enable periodic Alexa shopping list sync background poller.";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -114,6 +120,7 @@ in {
         INFAPLA_GIT_INTERVAL = toString cfg.gitCommitInterval;
         INFAPLA_TIMEZONE = cfg.timezone;
         INFAPLA_CALENDAR_ICS_URL = cfg.calendarIcsUrl;
+        ALEXA_SYNC_ENABLED = if cfg.alexaSync then "1" else "0";
         AGY_BIN = cfg.agyBin;
         AGY_MODEL = cfg.agyModel;
         AGY_EFFORT = cfg.agyEffort;

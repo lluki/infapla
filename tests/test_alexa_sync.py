@@ -29,7 +29,8 @@ class TestAlexaSync(unittest.TestCase):
             data_dir=self.temp_dir,
             alexa_sync_interval=60,
             alexa_sync_url="https://fake-lambda-url.amazonaws.com/sync",
-            alexa_sync_secret="test-secret"
+            alexa_sync_secret="test-secret",
+            alexa_sync_enabled=True
         )
         self.mock_sandbox = MagicMock(spec=SandboxRunner)
 
@@ -290,6 +291,20 @@ class TestAlexaSync(unittest.TestCase):
         service.start()
         self.assertTrue(service.running)
         service.stop()
+        self.assertFalse(service.running)
+
+    def test_service_disabled_by_default(self):
+        default_cfg = Config(data_dir=self.temp_dir)
+        self.assertFalse(default_cfg.alexa_sync_enabled)
+        mock_backend = MagicMock()
+        mock_backend.fetch_items.return_value = []
+        service = AlexaSyncService(
+            config=default_cfg,
+            storage=self.storage,
+            sandbox=self.mock_sandbox,
+            backend=mock_backend
+        )
+        service.start()
         self.assertFalse(service.running)
 
     def test_server_api_alexa_status_and_sync(self):

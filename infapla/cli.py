@@ -21,6 +21,8 @@ def main():
     parser.add_argument("--alexa-url", default=None, help="AWS Lambda Function URL / API Gateway endpoint for Alexa sync")
     parser.add_argument("--alexa-secret", default=None, help="Secret token / API key for Alexa sync HTTP endpoint")
     parser.add_argument("--aws-region", default=None, help="AWS region for DynamoDB (default: us-east-1)")
+    parser.add_argument("--alexa-sync-enabled", dest="alexa_sync_enabled", action="store_true", default=None, help="Enable periodic Alexa shopping list background sync poller")
+    parser.add_argument("--no-alexa-sync", dest="alexa_sync_enabled", action="store_false", help="Disable periodic Alexa shopping list background sync poller")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
 
     args = parser.parse_args()
@@ -57,6 +59,8 @@ def main():
         cfg.alexa_sync_secret = args.alexa_secret
     if args.aws_region:
         cfg.aws_region = args.aws_region
+    if args.alexa_sync_enabled is not None:
+        cfg.alexa_sync_enabled = args.alexa_sync_enabled
     if args.debug:
         cfg.debug = True
 

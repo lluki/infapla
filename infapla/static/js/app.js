@@ -3167,6 +3167,13 @@ const App = {
       if (status.configured) {
         info.push(`Backend: <strong>${status.backend_type || 'Native Web'}</strong>`);
         info.push(`Interval: <strong>${status.interval_seconds || 60}s</strong>`);
+        if (status.running) {
+          info.push('Poller: <strong style="color: #10b981;">Active</strong>');
+        } else if (status.enabled) {
+          info.push('Poller: <strong>Waiting...</strong>');
+        } else {
+          info.push('Poller: <strong style="color: var(--text-muted);">Disabled (Manual Sync Only)</strong>');
+        }
         if (status.total_synced_items !== undefined) {
           info.push(`Items synced: <strong>${status.total_synced_items}</strong>`);
         }

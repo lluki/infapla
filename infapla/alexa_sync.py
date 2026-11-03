@@ -526,16 +526,20 @@ class AlexaSyncService:
     def reload_backend(self) -> bool:
         """
         Reloads backend configuration (e.g. after user logs in or updates session).
-        Automatically starts the background sync worker if configured.
+        Automatically starts the background sync worker if configured and enabled.
         """
         with self.lock:
             self.backend = self._resolve_backend()
             is_conf = self.is_configured()
-            if is_conf and not self.running:
-                self.start()
-            elif not is_conf and self.running:
-                self.stop()
-            logger.info(f"Reloaded Alexa backend: {type(self.backend).__name__ if self.backend else 'None'} (configured={is_conf})")
+            if self.config.alexa_sync_enabled:
+                if is_conf and not self.running:
+                    self.start()
+                elif not is_conf and self.running:
+                    self.stop()
+            else:
+                if self.running:
+                    self.stop()
+            logger.info(f"Reloaded Alexa backend: {type(self.backend).__name__ if self.backend else 'None'} (configured={is_conf}, enabled={self.config.alexa_sync_enabled})")
             return is_conf
 
     def test_connection(self) -> Dict[str, Any]:
@@ -574,7 +578,11 @@ class AlexaSyncService:
             or self.config.alexa_dynamodb_table
         )
 
-    def start(self) -> None:
+    def start(self, force: bool = False) -> None:
+        if not self.config.alexa_sync_enabled and not force:
+            logger.info("Alexa shopping sync poller is disabled (ALEXA_SYNC_ENABLED=0). Skipping background worker.")
+            return
+
         if not self.is_configured():
             logger.info("Alexa shopping sync not configured. Skipping background worker.")
             return
@@ -728,6 +736,7 @@ class AlexaSyncService:
 
         return {
             "configured": self.is_configured(),
+            "enabled": self.config.alexa_sync_enabled,
             "running": self.running,
             "interval_seconds": self.interval,
             "backend_type": type(self.backend).__name__ if self.backend else None,

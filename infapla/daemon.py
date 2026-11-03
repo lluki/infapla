@@ -55,11 +55,14 @@ class InFaPlaDaemon:
         else:
             logger.info("Telegram bot not configured (set TELEGRAM_BOT_TOKEN to enable).")
 
-        # Start Alexa shopping sync if configured
-        if self.alexa_sync.is_configured():
-            self.alexa_sync.start()
+        # Start Alexa shopping sync if enabled and configured
+        if self.config.alexa_sync_enabled:
+            if self.alexa_sync.is_configured():
+                self.alexa_sync.start()
+            else:
+                logger.info("Alexa shopping sync poller enabled, but credentials/session not yet configured.")
         else:
-            logger.info("Alexa shopping sync not configured (set ALEXA_DYNAMODB_TABLE or ALEXA_SYNC_URL to enable).")
+            logger.info("Alexa shopping sync poller disabled (off by default, set ALEXA_SYNC_ENABLED=1 to enable).")
 
     def stop(self) -> None:
         if not self._is_running:
