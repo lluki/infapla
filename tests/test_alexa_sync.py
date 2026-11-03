@@ -113,30 +113,74 @@ class TestAlexaSync(unittest.TestCase):
         mock_table.delete_item.assert_called_once_with(Key={"id": "d1"})
 
     @patch("urllib.request.urlopen")
-    def test_native_alexa_backend(self, mock_urlopen):
+    def test_native_alexa_backend_legacy(self, mock_urlopen):
         backend = NativeAlexaBackend("fake-cookie", "fake-csrf", "amazon.de")
 
-        # Mock fetch from /api/todos
-        mock_resp_fetch = MagicMock()
-        mock_resp_fetch.read.return_value = json.dumps({
-            "values": [
-                {"id": "nat-1", "text": "oat milk", "complete": False},
-                {"id": "nat-2", "text": "apples", "complete": True}
-            ]
-        }).encode("utf-8")
-        mock_resp_fetch.__enter__.return_value = mock_resp_fetch
-        mock_urlopen.return_value = mock_resp_fetch
+        # First calls fail with 404 (modern API unavailable)
+        # Fallback call succeeds with /api/todos format
+        def fake_urlopen(req, *args, **kwargs):
+            url = req.full_url if hasattr(req, "full_url") else str(req)
+            mock_resp = MagicMock()
+            if "/api/todos" in url and req.get_method() == "GET":
+                mock_resp.read.return_value = json.dumps({
+                    "values": [
+                        {"id": "nat-1", "text": "oat milk", "complete": False},
+                        {"id": "nat-2", "text": "apples", "complete": True}
+                    ]
+                }).encode("utf-8")
+                mock_resp.__enter__.return_value = mock_resp
+                return mock_resp
+            elif req.get_method() == "DELETE":
+                mock_resp.__enter__.return_value = mock_resp
+                return mock_resp
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+        mock_urlopen.side_effect = fake_urlopen
 
         items = backend.fetch_items()
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["text"], "oat milk")
 
-        # Mock delete
-        mock_resp_del = MagicMock()
-        mock_resp_del.__enter__.return_value = mock_resp_del
-        mock_urlopen.return_value = mock_resp_del
-
         cleared = backend.clear_items(["nat-1"])
+        self.assertTrue(cleared)
+
+    @patch("urllib.request.urlopen")
+    def test_native_alexa_backend_modern(self, mock_urlopen):
+        backend = NativeAlexaBackend("fake-cookie", "fake-csrf", "amazon.com")
+
+        def fake_urlopen(req, *args, **kwargs):
+            url = req.full_url if hasattr(req, "full_url") else str(req)
+            mock_resp = MagicMock()
+            if "alexashoppinglists/api/v2/lists/fetch" in url:
+                mock_resp.read.return_value = json.dumps({
+                    "listInfoList": [
+                        {"listId": "lid-123", "listType": "SHOP"}
+                    ]
+                }).encode("utf-8")
+                mock_resp.__enter__.return_value = mock_resp
+                return mock_resp
+            elif "/items/fetch" in url:
+                mock_resp.read.return_value = json.dumps({
+                    "itemInfoList": [
+                        {"itemId": "item-abc", "itemName": "Oat Milk", "itemStatus": "ACTIVE", "version": 2},
+                        {"itemId": "item-def", "itemName": "Bread", "itemStatus": "COMPLETED", "version": 1}
+                    ]
+                }).encode("utf-8")
+                mock_resp.__enter__.return_value = mock_resp
+                return mock_resp
+            elif req.get_method() == "DELETE":
+                mock_resp.__enter__.return_value = mock_resp
+                return mock_resp
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+        mock_urlopen.side_effect = fake_urlopen
+
+        items = backend.fetch_items()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["text"], "Oat Milk")
+        self.assertEqual(items[0]["id"], "item-abc")
+
+        cleared = backend.clear_items(["item-abc"])
         self.assertTrue(cleared)
 
     def test_sync_once_success_flow(self):

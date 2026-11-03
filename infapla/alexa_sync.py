@@ -98,12 +98,18 @@ def parse_model_items(model_output: str) -> List[str]:
         "here are",
         "here is",
         "i have",
+        "i've",
         "sure",
         "output:",
         "shopping list:",
         "items to add:",
         "add only",
         "note:",
+        "the following",
+        "added to",
+        "items:",
+        "list:",
+        "updated",
     )
 
     has_bullets = any(
@@ -116,8 +122,20 @@ def parse_model_items(model_output: str) -> List[str]:
         if not line:
             continue
 
+        # If the output contains bullets, ignore any line without a bullet (prose / explanations)
+        if has_bullets and not re.match(r"^(?:[-*+]|\d+[\.\)])\s+", line):
+            continue
+
         lower_line = line.lower()
         if any(lower_line.startswith(prefix) for prefix in skip_prefixes):
+            continue
+
+        # Ignore lines ending in colon (headers / introductions)
+        if line.endswith(":"):
+            continue
+
+        # Ignore lines mentioning file paths / markdown links
+        if "file://" in line or "list.md" in line:
             continue
 
         # Strip markdown bullets: -, *, +, or numbers like 1., 1)
@@ -139,7 +157,7 @@ def parse_model_items(model_output: str) -> List[str]:
             for part in parts:
                 p = part.strip()
                 p = re.sub(r"^(?:and|und)\s+", "", p, flags=re.IGNORECASE).strip()
-                if p:
+                if p and not any(p.lower().startswith(prefix) for prefix in skip_prefixes):
                     split_items.append(p)
         if split_items:
             items = split_items
@@ -151,7 +169,12 @@ def parse_model_items(model_output: str) -> List[str]:
         for part in parts:
             p = part.strip()
             p = re.sub(r"^(?:and|und)\s+", "", p, flags=re.IGNORECASE).strip()
-            if p:
+            if (
+                p
+                and not any(p.lower().startswith(prefix) for prefix in skip_prefixes)
+                and "file://" not in p
+                and not p.endswith(":")
+            ):
                 items.append(p)
 
     return items
@@ -289,8 +312,12 @@ class DynamoDBAlexaBackend(BaseAlexaBackend):
 
 class NativeAlexaBackend(BaseAlexaBackend):
     """
-    Connects to Amazon's internal web API to read and clear the standard native Alexa shopping list.
-    Endpoint: https://alexa.{domain}/api/todos?type=SHOPPING_ITEM&size=100&completed=false
+    Connects to Amazon's Alexa shopping list API to read and clear the standard native Alexa shopping list.
+    Uses Amazon's modern alexashoppinglists API:
+      - Lists: https://www.{domain}/alexashoppinglists/api/v2/lists/fetch
+      - Items: https://www.{domain}/alexashoppinglists/api/v2/lists/{list_id}/items/fetch?limit=100
+      - Delete: https://www.{domain}/alexashoppinglists/api/v2/lists/{list_id}/items/{item_id}?version={version}
+    With automatic fallback to legacy https://alexa.{domain}/api/todos if supported.
     Works with standard "Alexa, add [item] to my shopping list" without needing custom skills.
     Requires an authenticated Amazon web session cookie bundle and csrf token.
     """
@@ -299,25 +326,98 @@ class NativeAlexaBackend(BaseAlexaBackend):
         self.cookie = cookie.strip()
         self.csrf = csrf.strip()
         clean_domain = domain.strip().lower()
-        if clean_domain.startswith("alexa."):
-            clean_domain = clean_domain[6:]
+        for prefix in ("alexa.", "www."):
+            if clean_domain.startswith(prefix):
+                clean_domain = clean_domain[len(prefix):]
         self.domain = clean_domain
-        self.base_url = f"https://alexa.{self.domain}"
+        self.retail_url = f"https://www.{self.domain}"
+        self.alexa_url = f"https://alexa.{self.domain}"
+        self.base_url = self.alexa_url
+        self._item_metadata: Dict[str, Dict[str, Any]] = {}
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
+    def _get_headers(self, content_type: Optional[str] = "application/json; charset=utf-8") -> Dict[str, str]:
+        headers = {
             "Cookie": self.cookie,
             "csrf": self.csrf,
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": f"{self.base_url}/spa/index.html",
-            "Accept": "application/json, text/javascript, */*; q=0.01"
+            "anti-csrftoken-a2z": self.csrf,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
         }
+        if content_type:
+            headers["Content-Type"] = content_type
+        return headers
 
     def fetch_items(self) -> List[Dict[str, Any]]:
-        url = f"{self.base_url}/api/todos?type=SHOPPING_ITEM&size=100&completed=false"
-        req = urllib.request.Request(url, headers=self._get_headers(), method="GET")
+        # 1. Try modern alexashoppinglists API first
+        domains_to_try = [self.retail_url]
+        if "amazon.com" not in self.retail_url:
+            domains_to_try.append("https://www.amazon.com")
+
+        last_error = None
+        for base in domains_to_try:
+            try:
+                fetch_lists_url = f"{base}/alexashoppinglists/api/v2/lists/fetch"
+                req = urllib.request.Request(
+                    fetch_lists_url,
+                    data=b"{}",
+                    headers=self._get_headers(),
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+
+                list_info_list = data.get("listInfoList")
+                if list_info_list is None:
+                    raise ValueError(f"Endpoint {base} did not return listInfoList")
+                shop_list = next((l for l in list_info_list if l.get("listType") == "SHOP"), None)
+                if not shop_list:
+                    shop_list = next((l for l in list_info_list if "SHOPPING" in str(l.get("listId", "")).upper()), None)
+                if not shop_list and list_info_list:
+                    shop_list = list_info_list[0]
+
+                if not shop_list:
+                    return []
+
+                list_id = shop_list["listId"]
+                items_url = f"{base}/alexashoppinglists/api/v2/lists/{urllib.parse.quote(str(list_id))}/items/fetch?limit=100"
+                req_items = urllib.request.Request(
+                    items_url,
+                    data=b"{}",
+                    headers=self._get_headers(),
+                    method="POST"
+                )
+                with urllib.request.urlopen(req_items, timeout=15) as resp_items:
+                    items_data = json.loads(resp_items.read().decode("utf-8"))
+
+                items = []
+                for it in items_data.get("itemInfoList", []):
+                    status = str(it.get("itemStatus", "")).upper()
+                    if status == "ACTIVE" and it.get("itemName"):
+                        i_id = str(it["itemId"])
+                        ver = it.get("version", 1)
+                        self._item_metadata[i_id] = {
+                            "base_url": base,
+                            "list_id": list_id,
+                            "version": ver
+                        }
+                        items.append({
+                            "id": i_id,
+                            "text": it["itemName"],
+                            "version": ver,
+                            "list_id": list_id
+                        })
+                return items
+            except Exception as e:
+                last_error = e
+                logger.debug(f"Modern alexashoppinglists API attempt failed for {base}: {e}")
+
+        # 2. Fallback to legacy alexa.amazon.{domain}/api/todos
+        legacy_url = f"{self.alexa_url}/api/todos?type=SHOPPING_ITEM&size=100&completed=false"
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            legacy_headers = self._get_headers(content_type=None)
+            legacy_headers["Referer"] = f"{self.alexa_url}/spa/index.html"
+            req = urllib.request.Request(legacy_url, headers=legacy_headers, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 values = data.get("values", [])
                 return [
@@ -325,17 +425,27 @@ class NativeAlexaBackend(BaseAlexaBackend):
                     for v in values
                     if not v.get("complete", False) and v.get("text")
                 ]
-        except Exception as e:
-            logger.error(f"Failed to fetch native Alexa shopping list from {url}: {e}")
-            raise
+        except Exception as legacy_err:
+            logger.error(f"Failed to fetch native Alexa shopping list: modern err={last_error}, legacy err={legacy_err}")
+            raise last_error or legacy_err
 
     def clear_items(self, item_ids: List[str]) -> bool:
         if not item_ids:
             return True
         success = True
         for item_id in item_ids:
-            url = f"{self.base_url}/api/todos/{urllib.parse.quote(str(item_id))}"
-            req = urllib.request.Request(url, headers=self._get_headers(), method="DELETE")
+            item_id_str = str(item_id)
+            meta = self._item_metadata.get(item_id_str)
+            if meta and "list_id" in meta:
+                base = meta.get("base_url", self.retail_url)
+                lid = meta["list_id"]
+                ver = meta.get("version", 1)
+                url = f"{base}/alexashoppinglists/api/v2/lists/{urllib.parse.quote(str(lid))}/items/{urllib.parse.quote(item_id_str)}?version={ver}"
+            else:
+                url = f"{self.alexa_url}/api/todos/{urllib.parse.quote(item_id_str)}"
+
+            headers = self._get_headers(content_type=None)
+            req = urllib.request.Request(url, headers=headers, method="DELETE")
             try:
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     pass
