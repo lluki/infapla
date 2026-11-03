@@ -660,15 +660,19 @@ class AlexaLoginProxy:
             clean_domain = domain.strip().lower()
             if clean_domain.startswith("alexa."):
                 clean_domain = clean_domain[6:]
+            if clean_domain.startswith("www."):
+                clean_domain = clean_domain[4:]
+            if not clean_domain.startswith("amazon."):
+                clean_domain = f"amazon.{clean_domain}"
 
             cj = http.cookiejar.CookieJar()
             lang = "de" if "de" in clean_domain else ("uk" if "co.uk" in clean_domain else "us")
 
             # Official Amazon signin URL for Alexa OAuth / web login
             start_url = (
-                f"https://www.amazon.{clean_domain}/ap/signin?"
+                f"https://www.{clean_domain}/ap/signin?"
                 f"showRmrMe=1&"
-                f"openid.return_to=https%3A%2F%2Falexa.amazon.{clean_domain}%2Flogin&"
+                f"openid.return_to=https%3A%2F%2Falexa.{clean_domain}%2Flogin&"
                 f"openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&"
                 f"openid.assoc_handle=amzn_dp_project_dee_{lang}&"
                 f"openid.mode=checkid_setup&"
@@ -698,14 +702,14 @@ class AlexaLoginProxy:
             if c.name.lower() == "csrf":
                 return c.value
 
-        # 2. Query alexa.amazon.{domain}/api/language or /spa/index.html to extract csrf
-        url = f"https://alexa.amazon.{domain}/api/language"
+        # 2. Query alexa.{domain}/api/language or /spa/index.html to extract csrf
+        url = f"https://alexa.{domain}/api/language"
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
         req = urllib.request.Request(
             url,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": f"https://alexa.amazon.{domain}/spa/index.html"
+                "Referer": f"https://alexa.{domain}/spa/index.html"
             }
         )
         try:
@@ -744,11 +748,11 @@ class AlexaLoginProxy:
         # Parse target URL
         parsed_target = urllib.parse.urlparse(target_url)
         if not parsed_target.scheme:
-            target_url = f"https://www.amazon.{domain}" + (target_url if target_url.startswith("/") else "/" + target_url)
+            target_url = f"https://www.{domain}" + (target_url if target_url.startswith("/") else "/" + target_url)
             parsed_target = urllib.parse.urlparse(target_url)
 
         is_completion_target = (
-            f"alexa.amazon.{domain}" in target_url
+            f"alexa.{domain}" in target_url
             or "/ap/maplanding" in target_url
             or "/spa/index.html" in target_url
         )
@@ -793,7 +797,7 @@ class AlexaLoginProxy:
 
                 # Check if this redirect indicates successful login
                 has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
-                if (f"alexa.amazon.{domain}" in resolved_loc or "/ap/maplanding" in resolved_loc or "/spa/index.html" in resolved_loc) and has_auth_cookies:
+                if (f"alexa.{domain}" in resolved_loc or "/ap/maplanding" in resolved_loc or "/spa/index.html" in resolved_loc) and has_auth_cookies:
                     cookie_str = self._extract_cookie_str(cj)
                     csrf = self._extract_csrf(cj, domain)
                     save_session_data(self.data_dir, cookie_str, csrf, domain)
