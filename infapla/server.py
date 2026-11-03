@@ -522,11 +522,15 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
 
     @app.route("/api/alexa/status", methods=["GET"])
     def alexa_status():
-        return jsonify(daemon.alexa_sync.get_status())
+        st = daemon.alexa_sync.get_status()
+        logger.info(f"[Server] Alexa status requested: configured={st.get('configured')}, running={st.get('running')}, backend={st.get('backend_type')}, domain={st.get('domain')}")
+        return jsonify(st)
 
     @app.route("/api/alexa/test", methods=["POST"])
     def alexa_test():
+        logger.info("[Server] Alexa test connection requested")
         res = daemon.alexa_sync.test_connection()
+        logger.info(f"[Server] Alexa test connection result: {res}")
         return jsonify(res)
 
     @app.route("/api/alexa/session", methods=["POST"])
@@ -535,27 +539,35 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         cookie = data.get("cookie", "").strip()
         csrf = data.get("csrf", "").strip()
         domain = data.get("domain", "amazon.de").strip()
+        logger.info(f"[Server] Saving manual Alexa session: domain={domain}, cookie_len={len(cookie)}, csrf_len={len(csrf)}")
         if not cookie:
             return jsonify({"error": "Cookie string required"}), 400
         save_session_data(storage.data_dir, cookie=cookie, csrf=csrf, domain=domain)
         daemon.alexa_sync.reload_backend()
+        st = daemon.alexa_sync.get_status()
+        logger.info(f"[Server] Alexa session saved and backend reloaded: configured={st.get('configured')}")
         return jsonify({
             "success": True,
-            "status": daemon.alexa_sync.get_status()
+            "status": st
         })
 
     @app.route("/api/alexa/session", methods=["DELETE"])
     def alexa_delete_session():
+        logger.info("[Server] Deleting saved Alexa session")
         deleted = delete_saved_session(storage.data_dir)
         daemon.alexa_sync.reload_backend()
+        st = daemon.alexa_sync.get_status()
+        logger.info(f"[Server] Alexa session deleted (success={deleted}, configured={st.get('configured')})")
         return jsonify({
             "success": deleted,
-            "status": daemon.alexa_sync.get_status()
+            "status": st
         })
 
     @app.route("/api/alexa/sync", methods=["POST"])
     def alexa_sync_trigger():
+        logger.info("[Server] Manual Alexa sync triggered")
         result = daemon.alexa_sync.sync_once()
+        logger.info(f"[Server] Manual Alexa sync result: {result}")
         shopping_data = storage.get_shopping_data()
         return jsonify({
             "sync_result": result,
@@ -566,7 +578,10 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     def alexa_login_start():
         domain = request.args.get("domain", "amazon.de").strip()
         sid, start_url = daemon.alexa_login_proxy.create_session(domain=domain)
-        proxy_url = f"proxy?sid={sid}&url={urllib.parse.quote(start_url)}"
+        # Build proxy URL relative to current start endpoint
+        proxy_path = f"{request.path.rsplit('/', 1)[0]}/proxy"
+        proxy_url = f"{proxy_path}?sid={sid}&url={urllib.parse.quote(start_url)}"
+        logger.info(f"[Server] Alexa login start: domain={domain}, sid={sid[:8]}, proxy_url={proxy_url}")
         return redirect(proxy_url)
 
     @app.route("/api/alexa/login/proxy", methods=["GET", "POST"])
@@ -574,20 +589,26 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
         sid = request.args.get("sid", "").strip()
         target_url = request.args.get("url", "").strip()
         if not sid or not target_url:
+            logger.warning(f"[Server] Alexa login proxy missing sid or url: sid={sid}, url={target_url}")
             return jsonify({"error": "Missing sid or url parameter"}), 400
 
         method = request.method
         req_headers = dict(request.headers)
         body_data = request.get_data() if method.upper() == "POST" else None
+        current_proxy_path = request.path
+
+        logger.info(f"[Server] Alexa proxy incoming: {method} {target_url} (sid={sid[:8]}, body={len(body_data) if body_data else 0}b)")
 
         status_code, resp_headers, body = daemon.alexa_login_proxy.proxy_request(
             sid=sid,
             target_url=target_url,
             method=method,
             headers=req_headers,
-            data=body_data
+            data=body_data,
+            proxy_path=current_proxy_path
         )
 
+        logger.info(f"[Server] Alexa proxy responding: HTTP {status_code} (Location: {resp_headers.get('Location')}, Content-Type: {resp_headers.get('Content-Type')})")
         resp = Response(body, status=status_code)
         for k, v in resp_headers.items():
             resp.headers[k] = v
@@ -595,6 +616,7 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
 
     @app.route("/api/alexa/login/success", methods=["GET"])
     def alexa_login_success():
+        logger.info("[Server] Alexa login success page displayed to client")
         html = """<!DOCTYPE html>
 <html lang="en">
 <head>

@@ -736,10 +736,12 @@ class AlexaLoginProxy:
         target_url: str,
         method: str = "GET",
         headers: Optional[Dict[str, str]] = None,
-        data: Optional[bytes] = None
+        data: Optional[bytes] = None,
+        proxy_path: str = "/api/alexa/login/proxy"
     ) -> Tuple[int, Dict[str, str], bytes]:
         sess = self.get_session(sid)
         if not sess:
+            logger.warning(f"[Alexa Proxy] Session {sid} not found or expired")
             return 400, {"Content-Type": "text/html; charset=utf-8"}, b"<h3>Invalid or expired login session. Please close this window and try again.</h3>"
 
         cj = sess["cookie_jar"]
@@ -751,22 +753,20 @@ class AlexaLoginProxy:
             target_url = f"https://www.{domain}" + (target_url if target_url.startswith("/") else "/" + target_url)
             parsed_target = urllib.parse.urlparse(target_url)
 
-        is_completion_target = (
-            f"alexa.{domain}" in target_url
-            or "/ap/maplanding" in target_url
-            or "/spa/index.html" in target_url
-        )
-
         req_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": f"https://www.{domain}/",
         }
         if headers:
             if "content-type" in headers:
                 req_headers["Content-Type"] = headers["content-type"]
             elif "Content-Type" in headers:
                 req_headers["Content-Type"] = headers["Content-Type"]
+
+        cookie_names_before = [c.name for c in cj]
+        logger.info(f"[Alexa Proxy] {method} {target_url} (SID={sid[:8]}, cookies={cookie_names_before}, body_len={len(data) if data else 0})")
 
         opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj), NoRedirectHandler)
         req = urllib.request.Request(
@@ -786,33 +786,63 @@ class AlexaLoginProxy:
             resp_headers = dict(e.headers)
             body = e.read() if hasattr(e, "read") else b""
         except Exception as e:
-            logger.error(f"Error during Amazon proxy request to {target_url}: {e}")
+            logger.error(f"[Alexa Proxy] Network error requesting {target_url}: {e}", exc_info=True)
             return 502, {"Content-Type": "text/html; charset=utf-8"}, f"<h3>Error communicating with Amazon: {e}</h3>".encode("utf-8")
+
+        cookie_names_after = [c.name for c in cj]
+        logger.info(f"[Alexa Proxy] Amazon HTTP {status_code} for {target_url} (cookies_now={cookie_names_after})")
+
+        success_loc = f"{proxy_path.rsplit('/', 1)[0]}/success"
 
         # Handle redirects (301, 302, 303, 307)
         if status_code in (301, 302, 303, 307):
             location = resp_headers.get("Location") or resp_headers.get("location")
             if location:
                 resolved_loc = urllib.parse.urljoin(target_url, location)
+                logger.info(f"[Alexa Proxy] Redirect to: {resolved_loc}")
 
-                # Check if this redirect indicates successful login
-                has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
-                if (f"alexa.{domain}" in resolved_loc or "/ap/maplanding" in resolved_loc or "/spa/index.html" in resolved_loc) and has_auth_cookies:
-                    cookie_str = self._extract_cookie_str(cj)
-                    csrf = self._extract_csrf(cj, domain)
-                    save_session_data(self.data_dir, cookie_str, csrf, domain)
-                    sess["status"] = "success"
-                    if self.on_success_callback:
-                        try:
-                            self.on_success_callback()
-                        except Exception as cb_err:
-                            logger.error(f"Callback on alexa login success failed: {cb_err}")
-                    return 302, {"Location": "success"}, b""
+                # Check if this redirect is toward completion (alexa login or maplanding)
+                if f"alexa.{domain}" in resolved_loc or "/ap/maplanding" in resolved_loc or "/spa/index.html" in resolved_loc:
+                    logger.info(f"[Alexa Proxy] Completion redirect detected: {resolved_loc}")
+                    # Follow completion endpoint to allow Alexa to set CSRF and session cookies
+                    try:
+                        comp_req = urllib.request.Request(
+                            resolved_loc,
+                            headers={
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                "Referer": f"https://www.{domain}/"
+                            }
+                        )
+                        comp_resp = opener.open(comp_req, timeout=15)
+                        logger.info(f"[Alexa Proxy] Visited completion target: HTTP {comp_resp.status}")
+                    except urllib.error.HTTPError as ce:
+                        logger.info(f"[Alexa Proxy] Visited completion target: HTTP {ce.code} (Location: {ce.headers.get('Location')})")
+                    except Exception as ce:
+                        logger.warning(f"[Alexa Proxy] Exception visiting completion target: {ce}")
 
-                proxy_loc = f"proxy?sid={sid}&url={urllib.parse.quote(resolved_loc)}"
+                    has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
+                    if has_auth_cookies:
+                        cookie_str = self._extract_cookie_str(cj)
+                        csrf = self._extract_csrf(cj, domain)
+                        save_session_data(self.data_dir, cookie_str, csrf, domain)
+                        sess["status"] = "success"
+                        if self.on_success_callback:
+                            try:
+                                self.on_success_callback()
+                            except Exception as cb_err:
+                                logger.error(f"[Alexa Proxy] Callback error on login success: {cb_err}")
+                        logger.info(f"[Alexa Proxy] *** LOGIN SUCCESSFUL! *** Saved session for domain={domain}, csrf={csrf[:10] if csrf else 'none'}...")
+                        return 302, {"Location": success_loc}, b""
+
+                proxy_loc = f"{proxy_path}?sid={sid}&url={urllib.parse.quote(resolved_loc)}"
                 return 302, {"Location": proxy_loc}, b""
 
         # Check if 200 response on completion target with auth cookies
+        is_completion_target = (
+            f"alexa.{domain}" in target_url
+            or "/ap/maplanding" in target_url
+            or "/spa/index.html" in target_url
+        )
         has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
         if is_completion_target and has_auth_cookies:
             cookie_str = self._extract_cookie_str(cj)
@@ -823,8 +853,9 @@ class AlexaLoginProxy:
                 try:
                     self.on_success_callback()
                 except Exception as cb_err:
-                    logger.error(f"Callback on alexa login success failed: {cb_err}")
-            return 302, {"Location": "success"}, b""
+                    logger.error(f"[Alexa Proxy] Callback error on login success: {cb_err}")
+            logger.info(f"[Alexa Proxy] *** LOGIN SUCCESSFUL (200)! *** Saved session for domain={domain}, csrf={csrf[:10] if csrf else 'none'}...")
+            return 302, {"Location": success_loc}, b""
 
         # Handle HTML response
         content_type = resp_headers.get("Content-Type", "").lower()
@@ -839,15 +870,18 @@ class AlexaLoginProxy:
                 elif "<head " in html_text:
                     html_text = re.sub(r"(<head\b[^>]*>)", rf'\1<base href="{base_host}/">', html_text, count=1)
 
-                # Rewrite form actions to point through proxy
-                def rewrite_form_action(match):
-                    full = match.group(0)
-                    action = match.group(1)
-                    resolved = urllib.parse.urljoin(target_url, action)
-                    new_action = f"proxy?sid={sid}&url={urllib.parse.quote(resolved)}"
-                    return full.replace(action, new_action)
+                # Rewrite form actions to preserve the true Amazon target URL
+                def rewrite_form_tag(match):
+                    tag = match.group(0)
+                    action_match = re.search(r'action=[\"\']([^\"\']*)[\"\']', tag)
+                    if action_match:
+                        old_action = action_match.group(1)
+                        resolved = urllib.parse.urljoin(target_url, old_action)
+                        new_action = f"{proxy_path}?sid={sid}&url={urllib.parse.quote(resolved)}"
+                        tag = tag.replace(action_match.group(0), f'action="{new_action}" data-amazon-action="{resolved}"')
+                    return tag
 
-                html_text = re.sub(r'<form\b[^>]*action=[\"\']([^\"\']*)[\"\'][^>]*>', rewrite_form_action, html_text)
+                html_text = re.sub(r'<form\b[^>]*>', rewrite_form_tag, html_text)
 
                 # Inject JavaScript helper
                 js_helper = f"""
@@ -856,23 +890,46 @@ class AlexaLoginProxy:
                     var sid = "{sid}";
                     var currentUrl = "{target_url}";
                     var baseHost = "{base_host}";
-                    var proxyBase = window.location.origin + window.location.pathname;
+                    var proxyPath = "{proxy_path}";
 
+                    console.log("[InFaPla Proxy] Login helper initialized for sid:", sid);
+
+                    // Intercept form submissions
                     document.addEventListener("submit", function(e) {{
                         var form = e.target;
-                        var act = form.getAttribute("action") || "";
-                        if (!act.includes("login/proxy")) {{
-                            var resolved = new URL(act, baseHost).href;
-                            form.action = proxyBase + "?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(resolved);
+                        var amazonAction = form.getAttribute("data-amazon-action");
+                        if (!amazonAction) {{
+                            var rawAct = form.getAttribute("action") || "";
+                            var match = rawAct.match(/[?&]url=([^&]+)/);
+                            if (match) {{
+                                amazonAction = decodeURIComponent(match[1]);
+                            }} else {{
+                                amazonAction = new URL(rawAct, baseHost).href;
+                            }}
                         }}
+                        var targetAction = window.location.origin + proxyPath + "?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(amazonAction);
+                        form.action = targetAction;
+                        console.log("[InFaPla Proxy] Submitting form to:", targetAction, "Targeting Amazon:", amazonAction);
                     }}, true);
 
+                    // Intercept link clicks
                     document.addEventListener("click", function(e) {{
                         var a = e.target.closest("a");
                         if (a && a.href && !a.href.startsWith("javascript:") && !a.href.startsWith("#")) {{
-                            if (!a.href.includes("login/proxy")) {{
+                            var targetHref = a.getAttribute("data-amazon-href");
+                            if (!targetHref) {{
+                                var match = a.href.match(/[?&]url=([^&]+)/);
+                                if (match) {{
+                                    targetHref = decodeURIComponent(match[1]);
+                                }} else if (!a.href.includes(proxyPath)) {{
+                                    targetHref = a.href;
+                                }}
+                            }}
+                            if (targetHref) {{
                                 e.preventDefault();
-                                window.location.href = proxyBase + "?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(a.href);
+                                var nextProxy = window.location.origin + proxyPath + "?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(targetHref);
+                                console.log("[InFaPla Proxy] Navigating link to:", nextProxy, "Targeting Amazon:", targetHref);
+                                window.location.href = nextProxy;
                             }}
                         }}
                     }}, true);
@@ -886,7 +943,7 @@ class AlexaLoginProxy:
 
                 body = html_text.encode("utf-8")
             except Exception as parse_err:
-                logger.error(f"Error rewriting proxied Amazon HTML: {parse_err}")
+                logger.error(f"[Alexa Proxy] Error rewriting proxied Amazon HTML: {parse_err}")
 
         # Filter response headers
         clean_headers = {}
