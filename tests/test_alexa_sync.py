@@ -27,7 +27,7 @@ class TestAlexaSync(unittest.TestCase):
         self.storage = Storage(self.temp_dir)
         self.config = Config(
             data_dir=self.temp_dir,
-            alexa_sync_interval=1,
+            alexa_sync_interval=60,
             alexa_sync_url="https://fake-lambda-url.amazonaws.com/sync",
             alexa_sync_secret="test-secret"
         )
@@ -250,76 +250,170 @@ class TestAlexaSync(unittest.TestCase):
 
     def test_server_api_alexa_status_and_sync(self):
         daemon = InFaPlaDaemon(self.config)
-        # Mock backend
-        mock_backend = MagicMock()
-        mock_backend.fetch_items.return_value = [
-            {"id": "test-1", "text": "fresh eggs"}
-        ]
-        mock_backend.clear_items.return_value = True
-        daemon.alexa_sync.backend = mock_backend
-        daemon.sandbox.execute_prompt = MagicMock(return_value={
-            "response": "- Fresh eggs\n"
-        })
+        try:
+            # Mock backend
+            mock_backend = MagicMock()
+            mock_backend.fetch_items.return_value = [
+                {"id": "test-1", "text": "fresh eggs"}
+            ]
+            mock_backend.clear_items.return_value = True
+            daemon.alexa_sync.backend = mock_backend
+            daemon.sandbox.execute_prompt = MagicMock(return_value={
+                "response": "- Fresh eggs\n"
+            })
 
-        app = create_app(daemon)
-        client = app.test_client()
+            app = create_app(daemon)
+            client = app.test_client()
 
-        # Test status endpoint
-        resp_status = client.get("/api/alexa/status")
-        self.assertEqual(resp_status.status_code, 200)
-        status_json = resp_status.get_json()
-        self.assertTrue(status_json["configured"])
+            # Test status endpoint
+            resp_status = client.get("/api/alexa/status")
+            self.assertEqual(resp_status.status_code, 200)
+            status_json = resp_status.get_json()
+            self.assertTrue(status_json["configured"])
 
-        # Test manual sync trigger endpoint
-        resp_sync = client.post("/api/alexa/sync")
-        self.assertEqual(resp_sync.status_code, 200)
-        sync_json = resp_sync.get_json()
-        self.assertTrue(sync_json["sync_result"]["success"])
-        self.assertIn("Fresh eggs", sync_json["sync_result"]["items_added"])
+            # Test manual sync trigger endpoint
+            resp_sync = client.post("/api/alexa/sync")
+            self.assertEqual(resp_sync.status_code, 200)
+            sync_json = resp_sync.get_json()
+            self.assertTrue(sync_json["sync_result"]["success"])
+            self.assertIn("Fresh eggs", sync_json["sync_result"]["items_added"])
+        finally:
+            daemon.stop()
 
     def test_direct_alexa_skill_webhook(self):
         daemon = InFaPlaDaemon(self.config)
-        daemon.sandbox.execute_prompt = MagicMock(return_value={
-            "response": "- Bananas\n- Sourdough bread\n"
-        })
-        app = create_app(daemon)
-        client = app.test_client()
+        try:
+            daemon.sandbox.execute_prompt = MagicMock(return_value={
+                "response": "- Bananas\n- Sourdough bread\n"
+            })
+            app = create_app(daemon)
+            client = app.test_client()
 
-        # 1. Test LaunchRequest
-        launch_payload = {
-            "version": "1.0",
-            "request": {"type": "LaunchRequest"}
-        }
-        res_launch = client.post("/api/alexa/skill", json=launch_payload)
-        self.assertEqual(res_launch.status_code, 200)
-        data = res_launch.get_json()
-        self.assertRegex(data["response"]["outputSpeech"]["text"], r"Hello Maya, you should snip \d+ times")
-        self.assertTrue(data["response"]["shouldEndSession"])
+            # 1. Test LaunchRequest
+            launch_payload = {
+                "version": "1.0",
+                "request": {"type": "LaunchRequest"}
+            }
+            res_launch = client.post("/api/alexa/skill", json=launch_payload)
+            self.assertEqual(res_launch.status_code, 200)
+            data = res_launch.get_json()
+            self.assertRegex(data["response"]["outputSpeech"]["text"], r"Hello Maya, you should snip \d+ times")
+            self.assertTrue(data["response"]["shouldEndSession"])
 
-        # 2. Test AddShoppingItemIntent
-        add_payload = {
-            "version": "1.0",
-            "request": {
-                "type": "IntentRequest",
-                "intent": {
-                    "name": "AddShoppingItemIntent",
-                    "slots": {
-                        "items": {"value": "bananas and sourdough bread"}
+            # 2. Test AddShoppingItemIntent
+            add_payload = {
+                "version": "1.0",
+                "request": {
+                    "type": "IntentRequest",
+                    "intent": {
+                        "name": "AddShoppingItemIntent",
+                        "slots": {
+                            "items": {"value": "bananas and sourdough bread"}
+                        }
                     }
                 }
             }
-        }
-        res_add = client.post("/api/alexa/skill", json=add_payload)
-        self.assertEqual(res_add.status_code, 200)
-        add_json = res_add.get_json()
-        self.assertIn("Added Bananas, Sourdough bread", add_json["response"]["outputSpeech"]["text"])
-        self.assertTrue(add_json["response"]["shouldEndSession"])
+            res_add = client.post("/api/alexa/skill", json=add_payload)
+            self.assertEqual(res_add.status_code, 200)
+            add_json = res_add.get_json()
+            self.assertIn("Added Bananas, Sourdough bread", add_json["response"]["outputSpeech"]["text"])
+            self.assertTrue(add_json["response"]["shouldEndSession"])
 
-        # Verify items were saved into InFaPla shopping list
-        shopping_data = daemon.storage.get_shopping_data()
-        item_texts = [i["text"] for i in shopping_data["items"]]
-        self.assertIn("Bananas", item_texts)
-        self.assertIn("Sourdough bread", item_texts)
+            # Verify items were saved into InFaPla shopping list
+            shopping_data = daemon.storage.get_shopping_data()
+            item_texts = [i["text"] for i in shopping_data["items"]]
+            self.assertIn("Bananas", item_texts)
+            self.assertIn("Sourdough bread", item_texts)
+        finally:
+            daemon.stop()
+
+    def test_session_persistence_and_reload(self):
+        from infapla.alexa_sync import (
+            save_session_data,
+            load_saved_session,
+            delete_saved_session,
+            get_session_file_path
+        )
+
+        # 1. Initially no session
+        self.assertIsNone(load_saved_session(self.temp_dir))
+
+        # 2. Save session
+        saved = save_session_data(self.temp_dir, cookie="my-cookie=abc", csrf="csrf-123", domain="amazon.de")
+        self.assertEqual(saved["cookie"], "my-cookie=abc")
+        self.assertEqual(saved["csrf"], "csrf-123")
+        self.assertEqual(saved["domain"], "amazon.de")
+
+        # 3. Load session
+        loaded = load_saved_session(self.temp_dir)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded["cookie"], "my-cookie=abc")
+
+        # 4. Service reload
+        service = AlexaSyncService(config=Config(data_dir=self.temp_dir), storage=self.storage, sandbox=self.mock_sandbox)
+        self.assertTrue(service.is_configured())
+        self.assertIsInstance(service.backend, NativeAlexaBackend)
+        self.assertEqual(service.backend.cookie, "my-cookie=abc")
+
+        # 5. Test connection
+        with patch.object(service.backend, "fetch_items", return_value=[{"id": "1", "text": "onions"}]):
+            res = service.test_connection()
+            self.assertTrue(res["success"])
+            self.assertEqual(res["count"], 1)
+            self.assertEqual(res["samples"], ["onions"])
+
+        # 6. Delete session
+        deleted = delete_saved_session(self.temp_dir)
+        self.assertTrue(deleted)
+        self.assertIsNone(load_saved_session(self.temp_dir))
+        service.reload_backend()
+        self.assertFalse(service.is_configured())
+
+    def test_alexa_login_proxy_and_server_endpoints(self):
+        daemon = InFaPlaDaemon(self.config)
+        try:
+            app = create_app(daemon)
+            client = app.test_client()
+
+            # 1. Test POST /api/alexa/session
+            res_save = client.post("/api/alexa/session", json={
+                "cookie": "test-cookie=123",
+                "csrf": "test-csrf",
+                "domain": "amazon.de"
+            })
+            self.assertEqual(res_save.status_code, 200)
+            self.assertTrue(res_save.get_json()["success"])
+
+            # Status check
+            res_status = client.get("/api/alexa/status")
+            status_json = res_status.get_json()
+            self.assertTrue(status_json["configured"])
+            self.assertEqual(status_json["domain"], "amazon.de")
+
+            # 2. Test POST /api/alexa/test
+            with patch.object(daemon.alexa_sync.backend, "fetch_items", return_value=[{"id": "a", "text": "tomatoes"}]):
+                res_test = client.post("/api/alexa/test")
+                self.assertEqual(res_test.status_code, 200)
+                self.assertTrue(res_test.get_json()["success"])
+                self.assertEqual(res_test.get_json()["count"], 1)
+
+            # 3. Test DELETE /api/alexa/session
+            res_del = client.delete("/api/alexa/session")
+            self.assertEqual(res_del.status_code, 200)
+            self.assertTrue(res_del.get_json()["success"])
+
+            # 4. Test GET /api/alexa/login/start (redirects to proxy)
+            res_start = client.get("/api/alexa/login/start?domain=amazon.de")
+            self.assertEqual(res_start.status_code, 302)
+            self.assertIn("/api/alexa/login/proxy?sid=", res_start.headers["Location"])
+
+            # 5. Test GET /api/alexa/login/success
+            res_success = client.get("/api/alexa/login/success")
+            self.assertEqual(res_success.status_code, 200)
+            self.assertIn(b"Alexa Connected!", res_success.data)
+            self.assertIn(b"alexa_login_success", res_success.data)
+        finally:
+            daemon.stop()
 
 
 if __name__ == "__main__":

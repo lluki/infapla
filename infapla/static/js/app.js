@@ -69,7 +69,22 @@ const App = {
       this.checkGitStatus();
       this.loadDashboardData();
       this.loadRecentChanges();
+      this.fetchAlexaStatus();
     });
+
+    // Listen for Alexa Amazon login success message from popup window
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'alexa_login_success') {
+        this.fetchAlexaStatus();
+        this.showToast('Amazon Alexa connected successfully! 🟢', 'success');
+        if (this.state.currentFilePath === 'shopping/list.md') {
+          this.loadShoppingData();
+        }
+      }
+    });
+
+    // Initial Alexa status check
+    this.fetchAlexaStatus();
 
     // Synchronize visual viewport (for mobile virtual keyboards)
     if (window.visualViewport) {
@@ -3064,6 +3079,229 @@ const App = {
         sendBtn.textContent = 'Send';
       }
       container.scrollTop = container.scrollHeight;
+    }
+  },
+
+  // ==================== ALEXA SHOPPING INTEGRATION ====================
+
+  async openAlexaModal() {
+    const modal = document.getElementById('alexa-sync-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    await this.fetchAlexaStatus();
+  },
+
+  closeAlexaModal() {
+    const modal = document.getElementById('alexa-sync-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  switchAlexaTab(tab) {
+    const loginTabBtn = document.getElementById('alexa-tab-login-btn');
+    const manualTabBtn = document.getElementById('alexa-tab-manual-btn');
+    const loginPane = document.getElementById('alexa-pane-login');
+    const manualPane = document.getElementById('alexa-pane-manual');
+
+    if (tab === 'login') {
+      if (loginTabBtn) loginTabBtn.classList.add('active');
+      if (manualTabBtn) manualTabBtn.classList.remove('active');
+      if (loginPane) loginPane.style.display = 'flex';
+      if (manualPane) manualPane.style.display = 'none';
+    } else {
+      if (loginTabBtn) loginTabBtn.classList.remove('active');
+      if (manualTabBtn) manualTabBtn.classList.add('active');
+      if (loginPane) loginPane.style.display = 'none';
+      if (manualPane) manualPane.style.display = 'flex';
+    }
+  },
+
+  async fetchAlexaStatus() {
+    try {
+      const res = await fetch('/api/alexa/status');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      this.renderAlexaStatus(data);
+      return data;
+    } catch (e) {
+      console.warn('Failed to fetch Alexa status:', e);
+    }
+  },
+
+  renderAlexaStatus(status) {
+    if (!status) return;
+    const dot = document.getElementById('alexa-status-dot');
+    const text = document.getElementById('alexa-status-text');
+    const detail = document.getElementById('alexa-status-detail');
+    const lastSync = document.getElementById('alexa-last-sync');
+    const disconnectBtn = document.getElementById('alexa-disconnect-btn');
+    const shoppingLabel = document.getElementById('shopping-alexa-label');
+
+    if (status.configured) {
+      if (dot) dot.style.background = '#10b981';
+      if (text) {
+        text.textContent = `Connected (${status.domain || 'Amazon'})`;
+        text.style.color = '#10b981';
+      }
+      if (shoppingLabel) shoppingLabel.textContent = 'Alexa 🟢';
+      if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
+    } else {
+      if (dot) dot.style.background = '#94a3b8';
+      if (text) {
+        text.textContent = 'Not Connected';
+        text.style.color = 'var(--text-primary)';
+      }
+      if (shoppingLabel) shoppingLabel.textContent = 'Alexa Sync';
+      if (disconnectBtn) disconnectBtn.style.display = 'none';
+    }
+
+    if (status.last_error) {
+      if (dot) dot.style.background = '#ef4444';
+      if (text) {
+        text.textContent = 'Connection Error / Expired';
+        text.style.color = '#ef4444';
+      }
+      if (shoppingLabel) shoppingLabel.textContent = 'Alexa 🔴';
+    }
+
+    if (detail) {
+      let info = [];
+      if (status.configured) {
+        info.push(`Backend: <strong>${status.backend_type || 'Native Web'}</strong>`);
+        info.push(`Interval: <strong>${status.interval_seconds || 60}s</strong>`);
+        if (status.total_synced_items !== undefined) {
+          info.push(`Items synced: <strong>${status.total_synced_items}</strong>`);
+        }
+      } else {
+        info.push('Log in with your Amazon account below to sync spoken Alexa shopping items automatically.');
+      }
+      if (status.last_error) {
+        info.push(`<span style="color: var(--danger);">Error: ${status.last_error}</span>`);
+      }
+      detail.innerHTML = info.join(' • ');
+    }
+
+    if (lastSync) {
+      if (status.last_sync_time) {
+        const d = new Date(status.last_sync_time * 1000);
+        lastSync.textContent = `Last sync: ${d.toLocaleTimeString()}`;
+      } else {
+        lastSync.textContent = 'Last sync: Never';
+      }
+    }
+  },
+
+  startAlexaLogin() {
+    const domainSelect = document.getElementById('alexa-login-domain');
+    const domain = domainSelect ? domainSelect.value : 'amazon.de';
+    const width = 620;
+    const height = 750;
+    const left = Math.max(0, (window.screen.width - width) / 2);
+    const top = Math.max(0, (window.screen.height - height) / 2);
+    const url = `/api/alexa/login/start?domain=${encodeURIComponent(domain)}`;
+
+    this.showToast('Opening Amazon login window...', 'info');
+    const popup = window.open(
+      url,
+      'alexa_amazon_login',
+      `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
+    );
+
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      window.open(url, '_blank');
+    }
+  },
+
+  async saveAlexaSessionManual(event) {
+    if (event) event.preventDefault();
+    const domain = (document.getElementById('alexa-manual-domain') || {}).value || 'amazon.de';
+    const cookie = (document.getElementById('alexa-manual-cookie') || {}).value || '';
+    const csrf = (document.getElementById('alexa-manual-csrf') || {}).value || '';
+
+    if (!cookie.trim()) {
+      this.showToast('Please paste a cookie string.', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/alexa/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, cookie, csrf })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save session');
+      this.showToast('Alexa credentials saved successfully! 🟢', 'success');
+      this.renderAlexaStatus(data.status);
+    } catch (e) {
+      this.showToast(`Error saving session: ${e.message}`, 'error');
+    }
+  },
+
+  async deleteAlexaSession() {
+    if (!confirm('Disconnect Amazon Alexa and remove saved credentials?')) return;
+    try {
+      const res = await fetch('/api/alexa/session', { method: 'DELETE' });
+      const data = await res.json();
+      this.showToast('Alexa session disconnected.', 'info');
+      this.renderAlexaStatus(data.status);
+    } catch (e) {
+      this.showToast(`Error disconnecting: ${e.message}`, 'error');
+    }
+  },
+
+  async testAlexaConnection() {
+    const btn = document.getElementById('alexa-test-btn');
+    const origText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Testing...'; }
+
+    try {
+      const res = await fetch('/api/alexa/test', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        let msg = `Connection verified! Found ${data.count} items on Alexa.`;
+        if (data.samples && data.samples.length > 0) {
+          msg += ` (${data.samples.slice(0, 3).join(', ')})`;
+        }
+        this.showToast(msg, 'success');
+      } else {
+        this.showToast(`Test failed: ${data.error || 'Could not connect'}`, 'error');
+      }
+      await this.fetchAlexaStatus();
+    } catch (e) {
+      this.showToast(`Test failed: ${e.message}`, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+    }
+  },
+
+  async triggerAlexaSync() {
+    const btn = document.getElementById('alexa-sync-now-btn');
+    const origText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
+
+    try {
+      const res = await fetch('/api/alexa/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.sync_result && data.sync_result.success) {
+        const added = data.sync_result.items_added || [];
+        if (added.length > 0) {
+          this.showToast(`Synced ${added.length} items from Alexa: ${added.join(', ')}`, 'success');
+        } else {
+          this.showToast(data.sync_result.message || 'No new items on Alexa shopping list.', 'info');
+        }
+        if (this.state.currentFilePath === 'shopping/list.md') {
+          await this.syncCurrentFileContent();
+          this.renderSpecialView('shopping', 'shopping/list.md', this.state.currentFileContent);
+        }
+      } else {
+        const err = (data.sync_result && data.sync_result.error) || 'Sync failed';
+        this.showToast(`Alexa sync: ${err}`, 'error');
+      }
+      await this.fetchAlexaStatus();
+    } catch (e) {
+      this.showToast(`Sync error: ${e.message}`, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
     }
   }
 };

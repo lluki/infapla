@@ -4,8 +4,12 @@ import time
 import random
 import logging
 import threading
+import uuid
+import http.cookiejar
 import urllib.request
 import urllib.parse
+from urllib.error import HTTPError
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
 from .config import Config
@@ -14,10 +18,69 @@ from .sandbox import SandboxRunner
 
 logger = logging.getLogger("infapla.alexa")
 
+SESSION_FILENAME = ".alexa_session.json"
+
 ALEXA_PARSE_PROMPT = (
     "Add only items to shopping list. Each item of input shopping list may contain items "
     "that are in fact multiple items. parse them and add them as separat items."
 )
+
+
+def get_session_file_path(data_dir: Path) -> Path:
+    return Path(data_dir) / SESSION_FILENAME
+
+
+def load_saved_session(data_dir: Path) -> Optional[Dict[str, Any]]:
+    path = get_session_file_path(data_dir)
+    if not path.exists():
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict) and data.get("cookie"):
+                return data
+    except Exception as e:
+        logger.warning(f"Failed to read saved Alexa session from {path}: {e}")
+    return None
+
+
+def save_session_data(data_dir: Path, cookie: str, csrf: str = "", domain: str = "amazon.de") -> Dict[str, Any]:
+    target = get_session_file_path(data_dir)
+    data = {
+        "cookie": cookie.strip(),
+        "csrf": csrf.strip() if csrf else "",
+        "domain": domain.strip().lower() if domain else "amazon.de",
+        "updated_at": int(time.time())
+    }
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    # Ensure .alexa_session.json is in data/.gitignore so credentials aren't committed
+    gi = Path(data_dir) / ".gitignore"
+    try:
+        content = gi.read_text(encoding="utf-8") if gi.exists() else ""
+        if SESSION_FILENAME not in content:
+            with open(gi, "a", encoding="utf-8") as f:
+                f.write(f"\n{SESSION_FILENAME}\n")
+    except Exception as e:
+        logger.debug(f"Failed to update data/.gitignore: {e}")
+
+    logger.info(f"Saved Alexa session to {target} (domain={data['domain']})")
+    return data
+
+
+def delete_saved_session(data_dir: Path) -> bool:
+    target = get_session_file_path(data_dir)
+    if target.exists():
+        try:
+            target.unlink()
+            logger.info(f"Removed Alexa session file {target}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove session file {target}: {e}")
+            return False
+    return False
 
 
 def parse_model_items(model_output: str) -> List[str]:
@@ -311,30 +374,92 @@ class AlexaSyncService:
         # Resolve backend
         if backend is not None:
             self.backend = backend
-        elif self.config.alexa_cookie and self.config.alexa_csrf:
-            self.backend = NativeAlexaBackend(
+        else:
+            self.backend = self._resolve_backend()
+
+    def _resolve_backend(self) -> Optional[BaseAlexaBackend]:
+        # 1. Check saved session in data directory
+        saved = load_saved_session(self.storage.data_dir)
+        if saved and saved.get("cookie"):
+            return NativeAlexaBackend(
+                cookie=saved["cookie"],
+                csrf=saved.get("csrf", ""),
+                domain=saved.get("domain", "amazon.de")
+            )
+
+        # 2. Check environment config for native web cookies
+        if self.config.alexa_cookie and self.config.alexa_csrf:
+            return NativeAlexaBackend(
                 cookie=self.config.alexa_cookie,
                 csrf=self.config.alexa_csrf,
                 domain=self.config.alexa_amazon_domain
             )
-        elif self.config.alexa_sync_url:
-            self.backend = HttpAlexaBackend(
+
+        # 3. Check HTTP / Lambda function URL
+        if self.config.alexa_sync_url:
+            return HttpAlexaBackend(
                 endpoint_url=self.config.alexa_sync_url,
                 secret_token=self.config.alexa_sync_secret
             )
-        elif self.config.alexa_dynamodb_table:
-            self.backend = DynamoDBAlexaBackend(
+
+        # 4. Check DynamoDB backend
+        if self.config.alexa_dynamodb_table:
+            return DynamoDBAlexaBackend(
                 table_name=self.config.alexa_dynamodb_table,
                 region_name=self.config.aws_region,
                 aws_access_key_id=self.config.aws_access_key_id,
                 aws_secret_access_key=self.config.aws_secret_access_key
             )
-        else:
-            self.backend = None
+
+        return None
+
+    def reload_backend(self) -> bool:
+        """
+        Reloads backend configuration (e.g. after user logs in or updates session).
+        Automatically starts the background sync worker if configured.
+        """
+        with self.lock:
+            self.backend = self._resolve_backend()
+            is_conf = self.is_configured()
+            if is_conf and not self.running:
+                self.start()
+            elif not is_conf and self.running:
+                self.stop()
+            logger.info(f"Reloaded Alexa backend: {type(self.backend).__name__ if self.backend else 'None'} (configured={is_conf})")
+            return is_conf
+
+    def test_connection(self) -> Dict[str, Any]:
+        """
+        Performs a read-only test against the Alexa backend to verify credentials and connectivity.
+        Does not clear or modify items.
+        """
+        backend = self.backend or self._resolve_backend()
+        if not backend:
+            return {
+                "success": False,
+                "error": "Alexa is not configured. Please log in or provide credentials."
+            }
+        try:
+            items = backend.fetch_items()
+            sample_titles = [i.get("text", "") for i in items if i.get("text")][:5]
+            return {
+                "success": True,
+                "count": len(items),
+                "samples": sample_titles,
+                "backend_type": type(backend).__name__
+            }
+        except Exception as e:
+            logger.warning(f"Alexa test connection failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "backend_type": type(backend).__name__
+            }
 
     def is_configured(self) -> bool:
         return self.backend is not None or bool(
-            (self.config.alexa_cookie and self.config.alexa_csrf)
+            load_saved_session(self.storage.data_dir)
+            or (self.config.alexa_cookie and self.config.alexa_csrf)
             or self.config.alexa_sync_url
             or self.config.alexa_dynamodb_table
         )
@@ -482,16 +607,290 @@ class AlexaSyncService:
             }
 
     def get_status(self) -> Dict[str, Any]:
+        saved = load_saved_session(self.storage.data_dir)
+        active_domain = None
+        if isinstance(self.backend, NativeAlexaBackend):
+            active_domain = self.backend.domain
+        elif saved:
+            active_domain = saved.get("domain")
+        elif self.config.alexa_amazon_domain:
+            active_domain = self.config.alexa_amazon_domain
+
         return {
             "configured": self.is_configured(),
             "running": self.running,
             "interval_seconds": self.interval,
             "backend_type": type(self.backend).__name__ if self.backend else None,
+            "domain": active_domain,
+            "session_saved": bool(saved),
+            "session_updated_at": saved.get("updated_at") if saved else None,
             "last_sync_time": self.last_sync_time,
             "last_sync_status": self.last_sync_status,
             "last_error": self.last_error,
             "total_synced_items": self.total_synced_items
         }
+
+
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Prevents urllib from automatically following redirects so we can intercept login steps."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class AlexaLoginProxy:
+    """
+    Manages interactive captive Amazon login sessions.
+    Handles login redirection, HTML rewriting, cookie capture, and CSRF token extraction.
+    """
+    def __init__(self, data_dir: Path, on_success_callback=None):
+        self.data_dir = Path(data_dir)
+        self.on_success_callback = on_success_callback
+        self.sessions: Dict[str, Dict[str, Any]] = {}
+        self.lock = threading.Lock()
+
+    def create_session(self, domain: str = "amazon.de") -> Tuple[str, str]:
+        with self.lock:
+            # Clean up sessions older than 20 minutes
+            now = time.time()
+            expired = [sid for sid, s in self.sessions.items() if now - s["created_at"] > 1200]
+            for sid in expired:
+                del self.sessions[sid]
+
+            sid = uuid.uuid4().hex
+            clean_domain = domain.strip().lower()
+            if clean_domain.startswith("alexa."):
+                clean_domain = clean_domain[6:]
+
+            cj = http.cookiejar.CookieJar()
+            lang = "de" if "de" in clean_domain else ("uk" if "co.uk" in clean_domain else "us")
+
+            # Official Amazon signin URL for Alexa OAuth / web login
+            start_url = (
+                f"https://www.amazon.{clean_domain}/ap/signin?"
+                f"showRmrMe=1&"
+                f"openid.return_to=https%3A%2F%2Falexa.amazon.{clean_domain}%2Flogin&"
+                f"openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&"
+                f"openid.assoc_handle=amzn_dp_project_dee_{lang}&"
+                f"openid.mode=checkid_setup&"
+                f"openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&"
+                f"openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0&"
+            )
+
+            self.sessions[sid] = {
+                "created_at": now,
+                "domain": clean_domain,
+                "cookie_jar": cj,
+                "status": "pending",
+                "error": None
+            }
+            return sid, start_url
+
+    def get_session(self, sid: str) -> Optional[Dict[str, Any]]:
+        with self.lock:
+            return self.sessions.get(sid)
+
+    def _extract_cookie_str(self, cookie_jar: http.cookiejar.CookieJar) -> str:
+        return "; ".join(f"{c.name}={c.value}" for c in cookie_jar)
+
+    def _extract_csrf(self, cookie_jar: http.cookiejar.CookieJar, domain: str) -> str:
+        # 1. Check if csrf cookie is already in the cookie jar
+        for c in cookie_jar:
+            if c.name.lower() == "csrf":
+                return c.value
+
+        # 2. Query alexa.amazon.{domain}/api/language or /spa/index.html to extract csrf
+        url = f"https://alexa.amazon.{domain}/api/language"
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": f"https://alexa.amazon.{domain}/spa/index.html"
+            }
+        )
+        try:
+            with opener.open(req, timeout=10) as resp:
+                for c in cookie_jar:
+                    if c.name.lower() == "csrf":
+                        return c.value
+                csrf_header = resp.headers.get("csrf")
+                if csrf_header:
+                    return csrf_header
+        except Exception as e:
+            logger.debug(f"Failed to fetch csrf from {url}: {e}")
+
+        # Check for any cookie containing csrf
+        for c in cookie_jar:
+            if "csrf" in c.name.lower():
+                return c.value
+
+        return ""
+
+    def proxy_request(
+        self,
+        sid: str,
+        target_url: str,
+        method: str = "GET",
+        headers: Optional[Dict[str, str]] = None,
+        data: Optional[bytes] = None
+    ) -> Tuple[int, Dict[str, str], bytes]:
+        sess = self.get_session(sid)
+        if not sess:
+            return 400, {"Content-Type": "text/html; charset=utf-8"}, b"<h3>Invalid or expired login session. Please close this window and try again.</h3>"
+
+        cj = sess["cookie_jar"]
+        domain = sess["domain"]
+
+        # Parse target URL
+        parsed_target = urllib.parse.urlparse(target_url)
+        if not parsed_target.scheme:
+            target_url = f"https://www.amazon.{domain}" + (target_url if target_url.startswith("/") else "/" + target_url)
+            parsed_target = urllib.parse.urlparse(target_url)
+
+        is_completion_target = (
+            f"alexa.amazon.{domain}" in target_url
+            or "/ap/maplanding" in target_url
+            or "/spa/index.html" in target_url
+        )
+
+        req_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+        }
+        if headers:
+            if "content-type" in headers:
+                req_headers["Content-Type"] = headers["content-type"]
+            elif "Content-Type" in headers:
+                req_headers["Content-Type"] = headers["Content-Type"]
+
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj), NoRedirectHandler)
+        req = urllib.request.Request(
+            target_url,
+            data=data if method.upper() == "POST" else None,
+            headers=req_headers,
+            method=method.upper()
+        )
+
+        try:
+            resp = opener.open(req, timeout=20)
+            status_code = resp.status
+            resp_headers = dict(resp.headers)
+            body = resp.read()
+        except urllib.error.HTTPError as e:
+            status_code = e.code
+            resp_headers = dict(e.headers)
+            body = e.read() if hasattr(e, "read") else b""
+        except Exception as e:
+            logger.error(f"Error during Amazon proxy request to {target_url}: {e}")
+            return 502, {"Content-Type": "text/html; charset=utf-8"}, f"<h3>Error communicating with Amazon: {e}</h3>".encode("utf-8")
+
+        # Handle redirects (301, 302, 303, 307)
+        if status_code in (301, 302, 303, 307):
+            location = resp_headers.get("Location") or resp_headers.get("location")
+            if location:
+                resolved_loc = urllib.parse.urljoin(target_url, location)
+
+                # Check if this redirect indicates successful login
+                has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
+                if (f"alexa.amazon.{domain}" in resolved_loc or "/ap/maplanding" in resolved_loc or "/spa/index.html" in resolved_loc) and has_auth_cookies:
+                    cookie_str = self._extract_cookie_str(cj)
+                    csrf = self._extract_csrf(cj, domain)
+                    save_session_data(self.data_dir, cookie_str, csrf, domain)
+                    sess["status"] = "success"
+                    if self.on_success_callback:
+                        try:
+                            self.on_success_callback()
+                        except Exception as cb_err:
+                            logger.error(f"Callback on alexa login success failed: {cb_err}")
+                    return 302, {"Location": "/api/alexa/login/success"}, b""
+
+                proxy_loc = f"/api/alexa/login/proxy?sid={sid}&url={urllib.parse.quote(resolved_loc)}"
+                return 302, {"Location": proxy_loc}, b""
+
+        # Check if 200 response on completion target with auth cookies
+        has_auth_cookies = any(c.name in ("at-main", "session-id", "ubid-main") for c in cj)
+        if is_completion_target and has_auth_cookies:
+            cookie_str = self._extract_cookie_str(cj)
+            csrf = self._extract_csrf(cj, domain)
+            save_session_data(self.data_dir, cookie_str, csrf, domain)
+            sess["status"] = "success"
+            if self.on_success_callback:
+                try:
+                    self.on_success_callback()
+                except Exception as cb_err:
+                    logger.error(f"Callback on alexa login success failed: {cb_err}")
+            return 302, {"Location": "/api/alexa/login/success"}, b""
+
+        # Handle HTML response
+        content_type = resp_headers.get("Content-Type", "").lower()
+        if "text/html" in content_type:
+            try:
+                html_text = body.decode("utf-8", errors="ignore")
+                base_host = f"{parsed_target.scheme}://{parsed_target.netloc}"
+
+                # Inject base tag so styles, JS, and images load correctly
+                if "<head>" in html_text:
+                    html_text = html_text.replace("<head>", f'<head><base href="{base_host}/">', 1)
+                elif "<head " in html_text:
+                    html_text = re.sub(r"(<head\b[^>]*>)", rf'\1<base href="{base_host}/">', html_text, count=1)
+
+                # Rewrite form actions to point through proxy
+                def rewrite_form_action(match):
+                    full = match.group(0)
+                    action = match.group(1)
+                    resolved = urllib.parse.urljoin(target_url, action)
+                    new_action = f"/api/alexa/login/proxy?sid={sid}&url={urllib.parse.quote(resolved)}"
+                    return full.replace(action, new_action)
+
+                html_text = re.sub(r'<form\b[^>]*action=[\"\']([^\"\']*)[\"\'][^>]*>', rewrite_form_action, html_text)
+
+                # Inject JavaScript helper
+                js_helper = f"""
+                <script>
+                (function() {{
+                    var sid = "{sid}";
+                    var currentUrl = "{target_url}";
+                    var baseHost = "{base_host}";
+
+                    document.addEventListener("submit", function(e) {{
+                        var form = e.target;
+                        var act = form.getAttribute("action") || "";
+                        if (!act.includes("/api/alexa/login/proxy")) {{
+                            var resolved = new URL(act, baseHost).href;
+                            form.action = "/api/alexa/login/proxy?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(resolved);
+                        }}
+                    }}, true);
+
+                    document.addEventListener("click", function(e) {{
+                        var a = e.target.closest("a");
+                        if (a && a.href && !a.href.startsWith("javascript:") && !a.href.startsWith("#")) {{
+                            if (!a.href.includes("/api/alexa/login/proxy")) {{
+                                e.preventDefault();
+                                window.location.href = "/api/alexa/login/proxy?sid=" + encodeURIComponent(sid) + "&url=" + encodeURIComponent(a.href);
+                            }}
+                        }}
+                    }}, true);
+                }})();
+                </script>
+                """
+                if "</body>" in html_text:
+                    html_text = html_text.replace("</body>", f"{js_helper}</body>", 1)
+                else:
+                    html_text += js_helper
+
+                body = html_text.encode("utf-8")
+            except Exception as parse_err:
+                logger.error(f"Error rewriting proxied Amazon HTML: {parse_err}")
+
+        # Filter response headers
+        clean_headers = {}
+        for k, v in resp_headers.items():
+            k_lower = k.lower()
+            if k_lower in ("content-type", "cache-control", "expires", "pragma"):
+                clean_headers[k] = v
+
+        return status_code, clean_headers, body
 
 
 def handle_alexa_skill_webhook(

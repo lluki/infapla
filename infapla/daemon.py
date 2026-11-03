@@ -7,7 +7,7 @@ from .storage import Storage
 from .git_manager import GitManager, PeriodicCommitter
 from .sandbox import SandboxRunner
 from .telegram_bot import TelegramBot
-from .alexa_sync import AlexaSyncService
+from .alexa_sync import AlexaSyncService, AlexaLoginProxy
 
 logger = logging.getLogger("infapla.daemon")
 
@@ -33,6 +33,10 @@ class InFaPlaDaemon:
             config=self.config,
             storage=self.storage,
             sandbox=self.sandbox
+        )
+        self.alexa_login_proxy = AlexaLoginProxy(
+            data_dir=self.config.data_dir,
+            on_success_callback=self.alexa_sync.reload_backend
         )
         self._is_running = False
 

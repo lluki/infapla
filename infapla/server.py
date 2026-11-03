@@ -2,15 +2,16 @@ import os
 import json
 import time
 import logging
+import urllib.parse
 from pathlib import Path
 from typing import Optional
 from werkzeug.utils import secure_filename
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_from_directory, redirect
 
 from .config import Config, default_config
 from .daemon import InFaPlaDaemon
 from .parsers.shopping import GROUP_CATEGORIES_PROMPT, MERGE_DUPLICATES_PROMPT
-from .alexa_sync import handle_alexa_skill_webhook
+from .alexa_sync import handle_alexa_skill_webhook, save_session_data, delete_saved_session
 
 logger = logging.getLogger("infapla.server")
 
@@ -523,6 +524,35 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
     def alexa_status():
         return jsonify(daemon.alexa_sync.get_status())
 
+    @app.route("/api/alexa/test", methods=["POST"])
+    def alexa_test():
+        res = daemon.alexa_sync.test_connection()
+        return jsonify(res)
+
+    @app.route("/api/alexa/session", methods=["POST"])
+    def alexa_save_session():
+        data = request.get_json(force=True, silent=True) or {}
+        cookie = data.get("cookie", "").strip()
+        csrf = data.get("csrf", "").strip()
+        domain = data.get("domain", "amazon.de").strip()
+        if not cookie:
+            return jsonify({"error": "Cookie string required"}), 400
+        save_session_data(storage.data_dir, cookie=cookie, csrf=csrf, domain=domain)
+        daemon.alexa_sync.reload_backend()
+        return jsonify({
+            "success": True,
+            "status": daemon.alexa_sync.get_status()
+        })
+
+    @app.route("/api/alexa/session", methods=["DELETE"])
+    def alexa_delete_session():
+        deleted = delete_saved_session(storage.data_dir)
+        daemon.alexa_sync.reload_backend()
+        return jsonify({
+            "success": deleted,
+            "status": daemon.alexa_sync.get_status()
+        })
+
     @app.route("/api/alexa/sync", methods=["POST"])
     def alexa_sync_trigger():
         result = daemon.alexa_sync.sync_once()
@@ -531,6 +561,112 @@ def create_app(daemon: InFaPlaDaemon) -> Flask:
             "sync_result": result,
             "shopping_data": shopping_data
         })
+
+    @app.route("/api/alexa/login/start", methods=["GET"])
+    def alexa_login_start():
+        domain = request.args.get("domain", "amazon.de").strip()
+        sid, start_url = daemon.alexa_login_proxy.create_session(domain=domain)
+        proxy_url = f"/api/alexa/login/proxy?sid={sid}&url={urllib.parse.quote(start_url)}"
+        return redirect(proxy_url)
+
+    @app.route("/api/alexa/login/proxy", methods=["GET", "POST"])
+    def alexa_login_proxy():
+        sid = request.args.get("sid", "").strip()
+        target_url = request.args.get("url", "").strip()
+        if not sid or not target_url:
+            return jsonify({"error": "Missing sid or url parameter"}), 400
+
+        method = request.method
+        req_headers = dict(request.headers)
+        body_data = request.get_data() if method.upper() == "POST" else None
+
+        status_code, resp_headers, body = daemon.alexa_login_proxy.proxy_request(
+            sid=sid,
+            target_url=target_url,
+            method=method,
+            headers=req_headers,
+            data=body_data
+        )
+
+        resp = Response(body, status=status_code)
+        for k, v in resp_headers.items():
+            resp.headers[k] = v
+        return resp
+
+    @app.route("/api/alexa/login/success", methods=["GET"])
+    def alexa_login_success():
+        html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Amazon Alexa Connected - InFaPla</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 1.5rem;
+      box-sizing: border-box;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .icon { font-size: 3.5rem; margin-bottom: 1rem; }
+    h2 { margin: 0 0 0.5rem 0; color: #10b981; font-size: 1.6rem; }
+    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; margin: 0 0 1.75rem 0; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.75rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    button:hover { background: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🎉</div>
+    <h2>Alexa Connected!</h2>
+    <p>Your Amazon Alexa session has been securely saved to InFaPla. Background shopping sync is now active.</p>
+    <button onclick="finish()">Close & Return to InFaPla</button>
+  </div>
+  <script>
+    function finish() {
+      try {
+        if (window.opener) {
+          window.opener.postMessage({ type: 'alexa_login_success' }, '*');
+        }
+      } catch(e) {}
+      setTimeout(function() { window.close(); }, 400);
+    }
+    // Automatically signal opener on page load
+    try {
+      if (window.opener) {
+        window.opener.postMessage({ type: 'alexa_login_success' }, '*');
+      }
+    } catch(e) {}
+  </script>
+</body>
+</html>"""
+        return Response(html, mimetype="text/html; charset=utf-8")
 
     @app.route("/api/alexa/skill", methods=["GET", "POST"])
     @app.route("/api/alexa", methods=["GET", "POST"])
