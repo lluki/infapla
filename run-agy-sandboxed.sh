@@ -35,9 +35,14 @@ if [[ -f "$HOME/.gitconfig" ]]; then
     EXTRA_BINDS+=(--ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig")
 fi
 
+WORKSPACE_BIND_FLAG=(--bind "$WORKSPACE" "$WORKSPACE")
+if [[ "${INFAPLA_READ_ONLY:-0}" == "1" ]]; then
+    WORKSPACE_BIND_FLAG=(--ro-bind "$WORKSPACE" "$WORKSPACE")
+fi
+
 echo "==========================================================" >&2
 echo " Starting Antigravity (agy) in Bubblewrap Sandbox" >&2
-echo " Workspace (RW): $WORKSPACE" >&2
+echo " Workspace:      $WORKSPACE (Read-Only: ${INFAPLA_READ_ONLY:-0})" >&2
 echo " System root:    READ-ONLY" >&2
 echo " agy permissions: --dangerously-skip-permissions" >&2
 echo "==========================================================" >&2
@@ -49,7 +54,7 @@ exec bwrap \
     --dev /dev \
     --proc /proc \
     --tmpfs /tmp \
-    --bind "$WORKSPACE" "$WORKSPACE" \
+    "${WORKSPACE_BIND_FLAG[@]}" \
     --bind "$HOME/.gemini" "$HOME/.gemini" \
     "${EXTRA_BINDS[@]}" \
     --chdir "$WORKSPACE" \

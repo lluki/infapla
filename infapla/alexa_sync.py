@@ -20,9 +20,18 @@ logger = logging.getLogger("infapla.alexa")
 
 SESSION_FILENAME = ".alexa_session.json"
 
+ALEXA_PARSE_SYSTEM_INSTRUCTION = (
+    "You are a strict shopping list item text parser. "
+    "Your ONLY role is to parse, clean, and split text into individual shopping list item names. "
+    "CRITICAL: Do NOT use any tools. Do NOT read, view, create, edit, or modify any files on disk. "
+    "Only respond with text containing the parsed items, one per line starting with '- '."
+)
+
 ALEXA_PARSE_PROMPT = (
-    "Add only items to shopping list. Each item of input shopping list may contain items "
-    "that are in fact multiple items. parse them and add them as separat items."
+    "Parse the input shopping list. Each item of input shopping list may contain items "
+    "that are in fact multiple items. parse them and add them as separat items.\n"
+    "Do NOT edit any files or use any tools.\n"
+    "Please output each separated item on its own line starting with '- '."
 )
 
 
@@ -673,7 +682,11 @@ class AlexaSyncService:
             )
 
             try:
-                model_result = self.sandbox.execute_prompt(full_prompt)
+                model_result = self.sandbox.execute_prompt(
+                    full_prompt,
+                    system_instruction=ALEXA_PARSE_SYSTEM_INSTRUCTION,
+                    read_only=True
+                )
                 response_text = model_result.get("response", "")
                 if model_result.get("error"):
                     err_msg = model_result["error"]
@@ -697,8 +710,21 @@ class AlexaSyncService:
 
             # Insert parsed items into InFaPla shopping list
             try:
+                existing_data = self.storage.get_shopping_data()
+                existing_active = {
+                    i["text"].strip().lower()
+                    for i in existing_data.get("items", [])
+                    if not i.get("done")
+                }
+                added_items = []
                 for item_name in parsed_items:
-                    self.storage.add_shopping(item_name)
+                    clean_name = item_name.strip()
+                    if clean_name.lower() in existing_active:
+                        logger.info(f"Item '{clean_name}' is already active in shopping list; skipping duplicate.")
+                        continue
+                    self.storage.add_shopping(clean_name)
+                    existing_active.add(clean_name.lower())
+                    added_items.append(clean_name)
             except Exception as e:
                 logger.error(f"Failed to add items to InFaPla shopping list: {e}")
                 self.last_sync_status = "storage_error"
@@ -715,12 +741,12 @@ class AlexaSyncService:
             self.last_sync_time = time.time()
             self.last_sync_status = "success"
             self.last_error = None
-            self.total_synced_items += len(parsed_items)
+            self.total_synced_items += len(added_items)
 
             return {
                 "success": True,
                 "raw_count": len(raw_items),
-                "items_added": parsed_items,
+                "items_added": added_items if added_items else parsed_items,
                 "cleared": cleared
             }
 
@@ -1185,7 +1211,11 @@ def handle_alexa_skill_webhook(
 
             parsed_items = []
             try:
-                res = sandbox.execute_prompt(full_prompt)
+                res = sandbox.execute_prompt(
+                    full_prompt,
+                    system_instruction=ALEXA_PARSE_SYSTEM_INSTRUCTION,
+                    read_only=True
+                )
                 parsed_items = parse_model_items(res.get("response", ""))
             except Exception as e:
                 logger.error(f"Error filtering items through model: {e}")
@@ -1195,8 +1225,19 @@ def handle_alexa_skill_webhook(
 
             # Insert into InFaPla shopping list
             try:
+                existing_data = storage.get_shopping_data()
+                existing_active = {
+                    i["text"].strip().lower()
+                    for i in existing_data.get("items", [])
+                    if not i.get("done")
+                }
                 for item_name in parsed_items:
-                    storage.add_shopping(item_name)
+                    clean_name = item_name.strip()
+                    if clean_name.lower() in existing_active:
+                        logger.info(f"Item '{clean_name}' is already active in shopping list; skipping duplicate.")
+                        continue
+                    storage.add_shopping(clean_name)
+                    existing_active.add(clean_name.lower())
             except Exception as e:
                 logger.error(f"Failed to save items to shopping list: {e}")
                 return build_ask_response(

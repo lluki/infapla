@@ -216,7 +216,7 @@ class TestAlexaSync(unittest.TestCase):
         # Verify prompt contained user's exact required prompt text
         self.mock_sandbox.execute_prompt.assert_called_once()
         sent_prompt = self.mock_sandbox.execute_prompt.call_args[0][0]
-        self.assertIn("Add only items to shopping list", sent_prompt)
+        self.assertIn("Parse the input shopping list", sent_prompt)
         self.assertIn("Each item of input shopping list may contain items that are in fact multiple items", sent_prompt)
         self.assertIn("parse them and add them as separat items", sent_prompt)
         self.assertIn("apples and bananas", sent_prompt)
@@ -231,6 +231,35 @@ class TestAlexaSync(unittest.TestCase):
 
         # Verify backend cleared with proper IDs
         mock_backend.clear_items.assert_called_once_with(["item-101", "item-102"])
+
+    def test_sync_once_prevents_duplicate_items(self):
+        # Pre-seed an active item
+        self.storage.add_shopping("Apples")
+
+        mock_backend = MagicMock()
+        mock_backend.fetch_items.return_value = [
+            {"id": "item-dup-1", "text": "apples"}
+        ]
+        mock_backend.clear_items.return_value = True
+
+        self.mock_sandbox.execute_prompt.return_value = {
+            "response": "- Apples\n",
+            "files_modified": []
+        }
+
+        service = AlexaSyncService(
+            config=self.config,
+            storage=self.storage,
+            sandbox=self.mock_sandbox,
+            backend=mock_backend
+        )
+
+        res = service.sync_once()
+        self.assertTrue(res["success"])
+        # Duplicate should be skipped
+        shopping_data = self.storage.get_shopping_data()
+        apples_items = [i for i in shopping_data["items"] if i["text"].lower() == "apples" and not i["done"]]
+        self.assertEqual(len(apples_items), 1)
 
     def test_sync_once_does_not_clear_on_model_error(self):
         mock_backend = MagicMock()

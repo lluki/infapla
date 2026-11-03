@@ -90,7 +90,9 @@ class SandboxRunner:
         self,
         prompt: str,
         current_file_path: Optional[str] = None,
-        file_content: Optional[str] = None
+        file_content: Optional[str] = None,
+        system_instruction: Optional[str] = None,
+        read_only: bool = False
     ) -> Generator[Dict[str, Any], None, None]:
         """
         Runs agy in bubblewrap sandbox via stdio stream-json.
@@ -102,7 +104,10 @@ class SandboxRunner:
         before_snapshot = self._get_files_snapshot()
 
         # Build prompt with context if viewing a file
-        context_parts = [SYSTEM_INSTRUCTION.strip()]
+        context_parts = []
+        sys_instr = system_instruction if system_instruction is not None else SYSTEM_INSTRUCTION
+        if sys_instr and sys_instr.strip():
+            context_parts.append(sys_instr.strip())
         if current_file_path:
             context_parts.append(f"\nThe user is currently viewing the file: {current_file_path}")
             if file_content is not None:
@@ -114,6 +119,8 @@ class SandboxRunner:
         env = os.environ.copy()
         env["INFAPLA_DATA_DIR"] = str(self.data_dir)
         env["WORKSPACE"] = str(self.data_dir)
+        if read_only:
+            env["INFAPLA_READ_ONLY"] = "1"
 
         cmd = [
             str(self.script_path),
@@ -215,7 +222,9 @@ class SandboxRunner:
         self,
         prompt: str,
         current_file_path: Optional[str] = None,
-        file_content: Optional[str] = None
+        file_content: Optional[str] = None,
+        system_instruction: Optional[str] = None,
+        read_only: bool = False
     ) -> Dict[str, Any]:
         """
         Synchronous convenience wrapper around execute_prompt_stream.
@@ -224,7 +233,13 @@ class SandboxRunner:
         files_modified = []
         error = None
 
-        for evt in self.execute_prompt_stream(prompt, current_file_path, file_content):
+        for evt in self.execute_prompt_stream(
+            prompt,
+            current_file_path=current_file_path,
+            file_content=file_content,
+            system_instruction=system_instruction,
+            read_only=read_only
+        ):
             if evt["type"] == "chunk":
                 full_response += evt["text"]
             elif evt["type"] == "done":
