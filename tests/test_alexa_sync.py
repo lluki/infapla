@@ -508,6 +508,36 @@ class TestAlexaSync(unittest.TestCase):
         finally:
             daemon.stop()
 
+    def test_has_authenticated_cookies(self):
+        from infapla.alexa_sync import AlexaLoginProxy
+        from http.cookiejar import CookieJar, Cookie
+
+        def make_jar(names):
+            cj = CookieJar()
+            for n in names:
+                c = Cookie(
+                    version=0, name=n, value="val", port=None, port_specified=False,
+                    domain=".amazon.de", domain_specified=True, domain_initial_dot=True,
+                    path="/", path_specified=True, secure=True, expires=None,
+                    discard=False, comment=None, comment_url=None, rest={}
+                )
+                cj.set_cookie(c)
+            return cj
+
+        proxy = AlexaLoginProxy(self.temp_dir)
+        # US cookies
+        self.assertTrue(proxy._has_authenticated_cookies(make_jar(["at-main", "session-id"])))
+        self.assertTrue(proxy._has_authenticated_cookies(make_jar(["ubid-main", "session-token"])))
+        # German cookies (amazon.de)
+        self.assertTrue(proxy._has_authenticated_cookies(make_jar(["at-acbde", "session-id"])))
+        self.assertTrue(proxy._has_authenticated_cookies(make_jar(["sess-at-acbde", "session-id"])))
+        self.assertTrue(proxy._has_authenticated_cookies(make_jar(["ubid-acbde", "session-token"])))
+        # UK cookies (amazon.co.uk)
+        self.assertTrue(proxy._has_authenticated_cookies(make_jar(["at-acbuk", "session-id"])))
+        # Unauthenticated cookies
+        self.assertFalse(proxy._has_authenticated_cookies(make_jar(["session-id", "session-id-time"])))
+        self.assertFalse(proxy._has_authenticated_cookies(make_jar([])))
+
 
 if __name__ == "__main__":
     unittest.main()

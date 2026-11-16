@@ -11,7 +11,7 @@
 
 python3Packages.buildPythonApplication {
   pname = "infapla";
-  version = "0.1.3";
+  version = "0.1.4";
   format = "pyproject";
 
   src = ./.;

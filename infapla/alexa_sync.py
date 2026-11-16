@@ -853,9 +853,10 @@ class AlexaLoginProxy:
     def _has_authenticated_cookies(self, cookie_jar: http.cookiejar.CookieJar) -> bool:
         cookie_names = set(c.name for c in cookie_jar)
         # Real authentication tokens set by Amazon after user credentials verified:
-        if any(k in cookie_names for k in ("at-main", "sess-at-main", "x-main")):
+        # Matches US (-main), Germany (-acbde), UK (-acbuk), France (-acbfr), etc.
+        if any(c.startswith(("at-", "sess-at-", "x-")) for c in cookie_names):
             return True
-        if "ubid-main" in cookie_names and "session-token" in cookie_names:
+        if any(c.startswith("ubid-") for c in cookie_names) and any(c.startswith("session-token") for c in cookie_names):
             return True
         return False
 
